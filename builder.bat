@@ -1,4 +1,4 @@
 @echo off
-title RxRat 
+title 8Ball 
 python builder.pyw
 pause
