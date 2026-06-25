@@ -295,6 +295,7 @@ def version_tuple(v):
     return tuple(int(x) for x in v.split("."))
 
 def check_for_updates():
+    app.after(0, lambda: terminal_write("[8Ball] Checking for update...\n"))
     try:
         req = urllib.request.Request(VERSION_URL, headers={"User-Agent": "Mozilla/5.0"})
         resp = urllib.request.urlopen(req, timeout=10)
@@ -302,11 +303,15 @@ def check_for_updates():
         remote = data.get("version", "")
         if remote and version_tuple(remote) > version_tuple(LOCAL_VERSION):
             app.after(0, lambda: _apply_update(data, remote))
+        else:
+            app.after(0, lambda: terminal_write("[8Ball] Up to date.\n"))
     except Exception:
-        pass
+        app.after(0, lambda: terminal_write("[8Ball] Update check failed (offline or no remote).\n"))
 
 def _apply_update(data, remote):
+    terminal_write(f"[8Ball] Updating to v{remote}...\n")
     if not messagebox.askyesno("Update Available", f"Version {remote} is available.\nDownload and update now?"):
+        terminal_write("[8Ball] Update skipped.\n")
         return
     remote_files = data.get("files", {})
     base = os.path.dirname(os.path.abspath(__file__))
@@ -323,9 +328,11 @@ def _apply_update(data, remote):
             resp = urllib.request.urlopen(req, timeout=30)
             with open(path, "wb") as f:
                 f.write(resp.read())
+        terminal_write("[8Ball] Update complete. Restarting...\n")
         messagebox.showinfo("Update Complete", f"Updated to v{remote}. Please restart the builder.")
         app.destroy()
     except Exception as e:
+        terminal_write(f"[8Ball] Update failed: {e}\n")
         messagebox.showerror("Update Failed", f"Could not download update:\n{e}")
 
 # --- GUI LAYOUT ---
