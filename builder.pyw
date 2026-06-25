@@ -34,7 +34,6 @@ GENBUTTON_COLOR = "#FDFDFD"
 STATUS = "#00ffaa"
 # --- FUNCTIONS ---
 def download_online_stub():
-    """Download rx.py from SRC_URL in the local rx.py, if set."""
     try:
         with open(FILE_NAME, 'r', encoding='utf-8') as f:
             src = f.read()
@@ -77,7 +76,6 @@ def replace_webhook(webhook):
     return True
 
 def update_feature_config_string(key: str, value) -> bool:
-    """Update a single string config value in FEATURE_CONFIG dict in rx.py."""
     if not os.path.exists(FILE_NAME):
         messagebox.showerror("Error", f"{FILE_NAME} not found!")
         return False
