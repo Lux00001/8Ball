@@ -314,31 +314,78 @@ def open_link(url):
     webbrowser.open(url)
 
 # --- UPDATE CHECK ---
-LOCAL_VERSION = "2.0.0"
+LOCAL_VERSION = "2.0.1"
 VERSION_URL = "https://raw.githubusercontent.com/Lux00001/8Ball/main/version.json"
+_pending_update_data = None
+_pending_update_version = ""
 
 def version_tuple(v):
-    return tuple(int(x) for x in v.split("."))
+    try:
+        parts = []
+        for x in v.split("."):
+            digits = "".join(c for c in x if c.isdigit())
+            parts.append(int(digits) if digits else 0)
+        return tuple(parts)
+    except:
+        return (0,)
+
+def _get_installed_version():
+    """Get the actually installed version from version.json, or fallback to LOCAL_VERSION."""
+    versions = []
+    VERSION_JSON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "version.json")
+    if os.path.exists(VERSION_JSON_PATH):
+        try:
+            with open(VERSION_JSON_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                v = data.get("version", "")
+                if v:
+                    versions.append(version_tuple(v))
+        except:
+            pass
+    if LOCAL_VERSION:
+        try:
+            versions.append(version_tuple(LOCAL_VERSION))
+        except:
+            pass
+    if versions:
+        max_v = max(versions)
+        return ".".join(str(x) for x in max_v)
+    return LOCAL_VERSION
 
 def check_for_updates():
     app.after(0, lambda: terminal_write("[8Ball] Checking for update...\n"))
     try:
+        installed = _get_installed_version()
         req = urllib.request.Request(VERSION_URL, headers={"User-Agent": "Mozilla/5.0"})
         resp = urllib.request.urlopen(req, timeout=10)
         data = json.loads(resp.read().decode())
         remote = data.get("version", "")
-        if remote and version_tuple(remote) > version_tuple(LOCAL_VERSION):
-            app.after(0, lambda: _apply_update(data, remote))
+        if remote and version_tuple(remote) > version_tuple(installed):
+            app.after(0, lambda: _show_update_ready(data, remote))
         else:
             app.after(0, lambda: terminal_write("[8Ball] Up to date.\n"))
     except Exception:
         app.after(0, lambda: terminal_write("[8Ball] Update check failed (offline or no remote).\n"))
 
-def _apply_update(data, remote):
-    terminal_write(f"[8Ball] Updating to v{remote}...\n")
+def _show_update_ready(data, remote):
+    global _pending_update_data, _pending_update_version
+    _pending_update_data = data
+    _pending_update_version = remote
+    installed = _get_installed_version()
+    app.after(0, lambda: status_label.configure(text=f"STATUS: v{installed}", text_color=TEXT_SUB))
+    app.after(0, lambda: update_btn.configure(text=f"Update v{remote} ready", text_color="#4AA9F7"))
+    app.after(0, lambda: update_btn.pack(side="top", anchor="e", pady=(0, 5)))
+    terminal_write(f"[8Ball] Update v{remote} available. Click the button to install.\n")
+
+def prompt_update():
+    if not _pending_update_data:
+        return
+    remote = _pending_update_version
     if not messagebox.askyesno("Update Available", f"Version {remote} is available.\nDownload and update now?"):
         terminal_write("[8Ball] Update skipped.\n")
         return
+    data = _pending_update_data
+    terminal_write(f"[8Ball] Updating to v{remote}...\n")
     remote_files = data.get("files", {})
     base = os.path.dirname(os.path.abspath(__file__))
     mappings = {
@@ -352,11 +399,37 @@ def _apply_update(data, remote):
                 continue
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
             resp = urllib.request.urlopen(req, timeout=30)
+            content = resp.read()
+            
+            # Patch the LOCAL_VERSION inside builder.pyw text directly
+            if key == "builder.pyw":
+                try:
+                    text = content.decode('utf-8')
+                    text = re.sub(r'LOCAL_VERSION\s*=\s*"[^"]*"', f'LOCAL_VERSION = "{remote}"', text, count=1)
+                    content = text.encode('utf-8')
+                except Exception as e_patch:
+                    print(f"Failed to patch LOCAL_VERSION inside builder.pyw: {e_patch}")
+                    
             with open(path, "wb") as f:
-                f.write(resp.read())
+                f.write(content)
+        
+        # Download and update the local version.json file
+        try:
+            req_v = urllib.request.Request(VERSION_URL, headers={"User-Agent": "Mozilla/5.0"})
+            resp_v = urllib.request.urlopen(req_v, timeout=10)
+            content_v = resp_v.read()
+            with open(os.path.join(base, "version.json"), "wb") as f_v:
+                f_v.write(content_v)
+        except Exception as e_v:
+            print(f"[8Ball] Failed to update local version.json: {e_v}")
+
         terminal_write("[8Ball] Update complete. Restarting...\n")
-        messagebox.showinfo("Update Complete", f"Updated to v{remote}. Please restart the builder.")
+        messagebox.showinfo("Update Complete", f"Updated to v{remote}. The builder will now restart.")
+        
+        # Self restart
+        subprocess.Popen([sys.executable, __file__])
         app.destroy()
+        sys.exit()
     except Exception as e:
         terminal_write(f"[8Ball] Update failed: {e}\n")
         messagebox.showerror("Update Failed", f"Could not download update:\n{e}")
@@ -466,8 +539,16 @@ button = ctk.CTkButton(btn_frame, text="GENERATE PAYLOAD", width=220, height=50,
                        font=("Arial Bold", 14), fg_color=ACCENT_BLUE, hover_color="#4AA9F7", command=build_exe)
 button.pack(side="left")
 
-status_label = ctk.CTkLabel(btn_frame, text="STATUS: READY", font=("Arial Bold", 10), text_color=TEXT_SUB)
-status_label.pack(side="right", padx=10)
+right_frame = ctk.CTkFrame(btn_frame, fg_color="transparent")
+right_frame.pack(side="right", padx=10)
+
+update_btn = ctk.CTkButton(right_frame, text="", fg_color="transparent", hover_color="#1e1e26",
+                           font=("Arial Bold", 10, "underline"), anchor="e", width=0,
+                           command=prompt_update)
+# hidden until check_for_updates finds something
+
+status_label = ctk.CTkLabel(right_frame, text="STATUS: READY", font=("Arial Bold", 10), text_color=TEXT_SUB)
+status_label.pack(side="bottom", anchor="e")
 
 # Terminal / Console output area
 terminal_frame = ctk.CTkFrame(content1, fg_color="#0c0c12", corner_radius=6)
