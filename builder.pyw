@@ -371,7 +371,7 @@ def open_link(url):
     webbrowser.open(url)
 
 # --- UPDATE CHECK ---
-LOCAL_VERSION = "2.0.8"
+LOCAL_VERSION = "2.0.9"
 VERSION_URL = "https://raw.githubusercontent.com/Lux00001/8Ball/main/version.json"
 _pending_update_data = None
 _pending_update_version = ""
