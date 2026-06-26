@@ -566,7 +566,7 @@ def _close_whats_new(win, version):
 
 # --- GUI LAYOUT ---
 app = ctk.CTk()
-app.title("8ball v2.0.8 | ALPHA")
+app.title("8ball v2.0.9 | ALPHA")
 app.geometry("680x720")
 app.configure(fg_color=BG_COLOR)
 app.resizable(False, False)
