@@ -366,7 +366,7 @@ def open_link(url):
     webbrowser.open(url)
 
 # --- UPDATE CHECK ---
-LOCAL_VERSION = "2.0.6"
+LOCAL_VERSION = "2.0.7"
 VERSION_URL = "https://raw.githubusercontent.com/Lux00001/8Ball/main/version.json"
 _pending_update_data = None
 _pending_update_version = ""
@@ -486,9 +486,82 @@ def prompt_update():
         terminal_write(f"[8Ball] Update failed: {e}\n")
         messagebox.showerror("Update Failed", f"Could not download update:\n{e}")
 
+# --- WHAT'S NEW ---
+WHATS_NEW_URL = "https://github.com/Lux00001/8Ball/blob/main/whatsnew.json"
+_SEEN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".whatsnew_seen")
+
+def _get_seen_version():
+    try:
+        if os.path.exists(_SEEN_FILE):
+            with open(_SEEN_FILE, "r", encoding="utf-8") as f:
+                return f.read().strip()
+    except Exception:
+        pass
+    return ""
+
+def _save_seen_version(version):
+    try:
+        with open(_SEEN_FILE, "w", encoding="utf-8") as f:
+            f.write(version.strip())
+    except Exception:
+        pass
+
+def check_whats_new():
+    try:
+        req = urllib.request.Request(WHATS_NEW_URL, headers={"User-Agent": "Mozilla/5.0"})
+        resp = urllib.request.urlopen(req, timeout=10)
+        data = json.loads(resp.read().decode())
+        remote_ver = data.get("version", "")
+        if not remote_ver:
+            return
+        seen = _get_seen_version()
+        if version_tuple(remote_ver) > version_tuple(seen):
+            app.after(0, lambda: _show_whats_new_popup(data))
+    except Exception:
+        pass
+
+def _show_whats_new_popup(data):
+    win = ctk.CTkToplevel(app)
+    win.title("")
+    win.geometry("500x480")
+    win.configure(fg_color="#16161d")
+    win.resizable(False, False)
+    win.transient(app)
+    win.grab_set()
+
+    title_frame = ctk.CTkFrame(win, fg_color="#1e1e26", height=60, corner_radius=0)
+    title_frame.pack(fill="x")
+    title_frame.pack_propagate(False)
+
+    ctk.CTkLabel(title_frame, text=data.get("title", "What's New"),
+                 font=("Arial Bold", 20), text_color="#ffffff").pack(expand=True)
+
+    scroll_frame = ctk.CTkScrollableFrame(win, fg_color="#16161d", corner_radius=0)
+    scroll_frame.pack(fill="both", expand=True, padx=20, pady=(15, 5))
+
+    changes = data.get("changes", [])
+    for i, change in enumerate(changes):
+        frame = ctk.CTkFrame(scroll_frame, fg_color="#1c1c24", corner_radius=6)
+        frame.pack(fill="x", pady=4, padx=2)
+        ctk.CTkLabel(frame, text=f"  {i+1}.  {change}",
+                     font=("Arial", 13), text_color="#c3c4c5",
+                     anchor="w", justify="left", wraplength=420).pack(padx=10, pady=10)
+
+    btn_frame = ctk.CTkFrame(win, fg_color="transparent", height=60)
+    btn_frame.pack(fill="x", pady=(5, 15))
+    btn_frame.pack_propagate(False)
+
+    ctk.CTkButton(btn_frame, text="Got it!", width=200, height=38, corner_radius=8,
+                  font=("Arial Bold", 13), fg_color="#797979", hover_color="#4AA9F7",
+                  command=lambda: _close_whats_new(win, data.get("version", ""))).pack(expand=True)
+
+def _close_whats_new(win, version):
+    _save_seen_version(version)
+    win.destroy()
+
 # --- GUI LAYOUT ---
 app = ctk.CTk()
-app.title("8ball v2.0.6 | ALPHA")
+app.title("8ball v2.0.7 | ALPHA")
 app.geometry("680x720")
 app.configure(fg_color=BG_COLOR)
 app.resizable(False, False)
@@ -679,5 +752,7 @@ for feature, var in features.items():
 
 # Check for updates on startup (non-blocking thread)
 threading.Thread(target=check_for_updates, daemon=True).start()
+# Check what's new (non-blocking)
+threading.Thread(target=check_whats_new, daemon=True).start()
 
 app.mainloop()

