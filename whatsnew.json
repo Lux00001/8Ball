@@ -1,0 +1,14 @@
+{
+  "version": "2.0.6",
+  "title": "What's New in 2.0.6",
+  "changes": [
+    "Fixed webhook domain: discordapp.com \u2192 discord.com (old domain no longer works)",
+    "Fixed webhook validation \u2014 now accepts all discord.com subdomains",
+    "Disabled broken remote stub download that overrode local fixes",
+    "Added Content-Type fallback header to webhook requests",
+    "Fixed syntax errors (orphaned finally blocks)",
+    "Removed frozen check \u2014 can now run stub.py directly",
+    "All features enabled in standalone stub",
+    "PermissionError fix in wallet/zip stealer (unique filenames per thread)"
+  ]
+}
