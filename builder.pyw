@@ -366,7 +366,7 @@ def open_link(url):
     webbrowser.open(url)
 
 # --- UPDATE CHECK ---
-LOCAL_VERSION = "2.0.7"
+LOCAL_VERSION = "2.0.8"
 VERSION_URL = "https://raw.githubusercontent.com/Lux00001/8Ball/main/version.json"
 _pending_update_data = None
 _pending_update_version = ""
@@ -561,7 +561,7 @@ def _close_whats_new(win, version):
 
 # --- GUI LAYOUT ---
 app = ctk.CTk()
-app.title("8ball v2.0.7 | ALPHA")
+app.title("8ball v2.0.8 | ALPHA")
 app.geometry("680x720")
 app.configure(fg_color=BG_COLOR)
 app.resizable(False, False)
