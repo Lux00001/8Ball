@@ -366,7 +366,7 @@ def open_link(url):
     webbrowser.open(url)
 
 # --- UPDATE CHECK ---
-LOCAL_VERSION = "2.0.8"
+LOCAL_VERSION = "2.0.7"
 VERSION_URL = "https://raw.githubusercontent.com/Lux00001/8Ball/main/version.json"
 _pending_update_data = None
 _pending_update_version = ""
@@ -487,7 +487,7 @@ def prompt_update():
         messagebox.showerror("Update Failed", f"Could not download update:\n{e}")
 
 # --- WHAT'S NEW ---
-WHATS_NEW_URL = "https://github.com/Lux00001/8Ball/blob/main/whatsnew.json"
+WHATS_NEW_URL = "https://raw.githubusercontent.com/Lux00001/8Ball/main/Build_Project/whatsnew.json"
 _SEEN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".whatsnew_seen")
 
 def _get_seen_version():
@@ -561,7 +561,7 @@ def _close_whats_new(win, version):
 
 # --- GUI LAYOUT ---
 app = ctk.CTk()
-app.title("8ball v2.0.8 | ALPHA")
+app.title("8ball v2.0.7 | ALPHA")
 app.geometry("680x720")
 app.configure(fg_color=BG_COLOR)
 app.resizable(False, False)
