@@ -88,7 +88,7 @@ def download_online_stub():
         new_src = resp.read().decode('utf-8')
         with open(FILE_NAME, 'w', encoding='utf-8') as f:
             f.write(new_src)
-        print("[RX Builder] Stub downloaded successfully.")
+        print("[8Ball Builder] Stub downloaded successfully.")
         return True
     except Exception as e:
         messagebox.showerror("Download Error", f"Failed to download stub:\n{e}")
